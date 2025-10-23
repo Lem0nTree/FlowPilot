@@ -36,7 +36,7 @@ async function seed() {
         status: 'scheduled',
         scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
         priority: 0,
-        executionEffort: 1000,
+        executionEffort: BigInt(1000),
         fees: '1000000',
         nickname: 'DCA Bot #1',
         description: 'Daily dollar cost averaging bot',
@@ -50,7 +50,7 @@ async function seed() {
         status: 'scheduled',
         scheduledAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Next week
         priority: 1,
-        executionEffort: 500,
+        executionEffort: BigInt(500),
         fees: '500000',
         nickname: 'Staking Rewards Collector',
         description: 'Automatically claims staking rewards',

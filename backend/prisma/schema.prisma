@@ -32,7 +32,7 @@ model Agent {
   status          String   // "scheduled", "executed", "cancelled"
   scheduledAt     DateTime
   priority        Int?
-  executionEffort UInt64?
+  executionEffort BigInt?
   fees            String?  // Stored as string to handle large numbers
   
   // User-defined metadata

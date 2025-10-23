@@ -147,6 +147,8 @@ The server will start on `http://localhost:5000`
 
 ### Performance Optimizations
 
+- **Time-based Caching**: Avoids API calls when data is fresh (configurable interval)
+- **State Reconciliation**: Only processes changes instead of reprocessing everything
 - **Upsert Operations**: Single database call instead of find + create/update
 - **Parallel Processing**: All agent operations run concurrently with `Promise.all`
 - **Centralized Prisma Client**: Prevents connection pool exhaustion
@@ -182,6 +184,7 @@ The API includes comprehensive error handling for:
 - `npm run db:seed` - Seed database with sample data
 - `npm run test:connection` - Test database connectivity
 - `npm run test:upsert` - Test upsert performance optimizations
+- `npm run test:cache` - Test caching and reconciliation performance
 
 ### Project Structure
 

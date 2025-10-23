@@ -30,7 +30,7 @@ async function testUpsertPerformance() {
         status: 'scheduled',
         scheduledAt: new Date(),
         priority: 1,
-        executionEffort: 1000,
+        executionEffort: BigInt(1000),
         fees: '1000000'
       },
       create: {
@@ -40,7 +40,7 @@ async function testUpsertPerformance() {
         status: 'scheduled',
         scheduledAt: new Date(),
         priority: 1,
-        executionEffort: 1000,
+        executionEffort: BigInt(1000),
         fees: '1000000',
         userId: user.id
       }
@@ -60,7 +60,7 @@ async function testUpsertPerformance() {
           status: 'scheduled',
           scheduledAt: new Date(),
           priority: i,
-          executionEffort: 1000 + i,
+          executionEffort: BigInt(1000 + i),
           fees: `${1000000 + i}`
         },
         create: {
@@ -70,7 +70,7 @@ async function testUpsertPerformance() {
           status: 'scheduled',
           scheduledAt: new Date(),
           priority: i,
-          executionEffort: 1000 + i,
+          executionEffort: BigInt(1000 + i),
           fees: `${1000000 + i}`,
           userId: user.id
         }

@@ -1,0 +1,47 @@
+{
+  "name": "flowpilot-backend",
+  "version": "1.0.0",
+  "description": "FlowPilot Backend - Smart Scan Service for Flow Agents",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "start:testnet": "cross-env NODE_ENV=testnet node src/server.js",
+    "dev:testnet": "cross-env NODE_ENV=testnet nodemon src/server.js",
+    "db:generate": "npx prisma generate",
+    "db:push": "npx prisma db push",
+    "db:studio": "npx prisma studio",
+    "db:seed": "node src/scripts/seed.js",
+    "test:connection": "node src/test/connection-test.js",
+    "test:upsert": "node src/test/upsert-performance-test.js",
+    "test:cache": "node src/test/cache-performance-test.js"
+  },
+  "keywords": [
+    "flow",
+    "blockchain",
+    "agents",
+    "scheduled-transactions"
+  ],
+  "author": "FlowPilot Team",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.7.1",
+    "axios": "^1.6.2",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "nodemon": "^3.0.2",
+    "prisma": "^5.7.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

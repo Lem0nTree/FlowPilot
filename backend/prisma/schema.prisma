@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  address   String   @unique
+  nickname  String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  agents    Agent[]
+  
+  @@map("users")
+}
+
+model Agent {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  scheduledTxId  String   @unique // From Find Labs API
+  ownerAddress    String   // User's Flow address
+  handlerContract String   // e.g., "A.12345.DCABot"
+  status          String   // "scheduled", "executed", "cancelled"
+  scheduledAt     DateTime
+  priority        String?
+  executionEffort BigInt?
+  fees            String?  // Stored as string to handle large numbers
+  
+  // User-defined metadata
+  nickname        String?
+  description     String?
+  tags            String[] // Array of tags for categorization
+  isActive        Boolean  @default(true)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  lastExecutedAt  DateTime?
+  
+  // Relations
+  userId          String   @db.ObjectId
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Indexes for better query performance
+  @@index([ownerAddress])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([userId])
+  @@map("agents")
+}
+
+model ScanHistory {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userAddress String
+  agentsFound Int      @default(0)
+  scanType    String   // "initial", "rescan", "manual"
+  success     Boolean
+  errorMessage String?
+  createdAt   DateTime @default(now())
+  
+  @@index([userAddress])
+  @@index([createdAt])
+  @@map("scan_history")
+}

@@ -31,7 +31,7 @@ model Agent {
   handlerContract String   // e.g., "A.12345.DCABot"
   status          String   // "scheduled", "executed", "cancelled"
   scheduledAt     DateTime
-  priority        Int?
+  priority        String?
   executionEffort BigInt?
   fees            String?  // Stored as string to handle large numbers
   

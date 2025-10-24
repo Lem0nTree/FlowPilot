@@ -5,8 +5,58 @@ const { validateUserUpdate, validateRequest } = require('../middleware/validatio
 const router = express.Router();
 
 /**
- * GET /api/users/:address
- * Get user profile by Flow address
+ * @swagger
+ * /api/users/{address}:
+ *   get:
+ *     summary: Get user profile by Flow address
+ *     description: Retrieves user profile information and associated agents by Flow blockchain address
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "0x1234567890abcdef"
+ *         description: Flow blockchain address
+ *     responses:
+ *       200:
+ *         description: User profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         user:
+ *                           $ref: '#/components/schemas/User'
+ *                         agents:
+ *                           type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/Agent'
+ *                         stats:
+ *                           type: object
+ *                           properties:
+ *                             totalAgents:
+ *                               type: integer
+ *                             activeAgents:
+ *                               type: integer
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/:address', async (req, res, next) => {
   const { address } = req.params;
@@ -61,8 +111,69 @@ router.get('/:address', async (req, res, next) => {
 });
 
 /**
- * PUT /api/users/:address
- * Update user profile
+ * @swagger
+ * /api/users/{address}:
+ *   put:
+ *     summary: Update user profile
+ *     description: Updates user profile information including nickname and email
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "0x1234567890abcdef"
+ *         description: Flow blockchain address
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               nickname:
+ *                 type: string
+ *                 example: "FlowUser123"
+ *                 description: User's display nickname
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "user@example.com"
+ *                 description: User's email address
+ *     responses:
+ *       200:
+ *         description: User profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         user:
+ *                           $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Invalid request parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.put('/:address', validateUserUpdate, validateRequest, async (req, res, next) => {
   const { address } = req.params;
@@ -111,8 +222,70 @@ router.put('/:address', validateUserUpdate, validateRequest, async (req, res, ne
 });
 
 /**
- * GET /api/users/:address/scan-history
- * Get scan history for a user
+ * @swagger
+ * /api/users/{address}/scan-history:
+ *   get:
+ *     summary: Get scan history for a user
+ *     description: Retrieves paginated scan history for a specific user
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "0x1234567890abcdef"
+ *         description: Flow blockchain address
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         example: 20
+ *         description: Number of records to return
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         example: 0
+ *         description: Number of records to skip
+ *     responses:
+ *       200:
+ *         description: Scan history retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         scanHistory:
+ *                           type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/ScanHistory'
+ *                         pagination:
+ *                           type: object
+ *                           properties:
+ *                             total:
+ *                               type: integer
+ *                             limit:
+ *                               type: integer
+ *                             offset:
+ *                               type: integer
+ *                             hasMore:
+ *                               type: boolean
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/:address/scan-history', async (req, res, next) => {
   const { address } = req.params;
@@ -150,8 +323,44 @@ router.get('/:address/scan-history', async (req, res, next) => {
 });
 
 /**
- * GET /api/users/:address/dashboard
- * Get dashboard data for a user
+ * @swagger
+ * /api/users/{address}/dashboard:
+ *   get:
+ *     summary: Get dashboard data for a user
+ *     description: Retrieves comprehensive dashboard data including user info, agent statistics, upcoming agents, and recent scans
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "0x1234567890abcdef"
+ *         description: Flow blockchain address
+ *     responses:
+ *       200:
+ *         description: Dashboard data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/DashboardData'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/:address/dashboard', async (req, res, next) => {
   const { address } = req.params;

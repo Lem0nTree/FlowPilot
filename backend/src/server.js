@@ -4,11 +4,13 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
 const { errorHandler } = require('./middleware/errorHandler');
 const { validateRequest } = require('./middleware/validation');
 const prisma = require('./config/prisma');
+const swaggerSpecs = require('./config/swagger');
 
 // Import routes
 const syncRoutes = require('./routes/sync');
@@ -44,6 +46,39 @@ app.use(morgan(process.env.LOG_LEVEL || 'combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Swagger documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'FlowPilot API Documentation'
+}));
+
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Returns the current health status of the API server
+ *     tags: [Health]
+ *     responses:
+ *       200:
+ *         description: Server is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: "OK"
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2024-01-01T00:00:00.000Z"
+ *                 uptime:
+ *                   type: number
+ *                   example: 3600.5
+ *                   description: Server uptime in seconds
+ */
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({

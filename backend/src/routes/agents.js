@@ -5,8 +5,62 @@ const { validateAgentUpdate, validateRequest } = require('../middleware/validati
 const router = express.Router();
 
 /**
- * GET /api/agents/:userId
- * Get all agents for a user
+ * @swagger
+ * /api/agents/{userId}:
+ *   get:
+ *     summary: Get all agents for a user
+ *     description: Retrieves all agents associated with a specific user ID with optional filtering
+ *     tags: [Agents]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *         description: User ID
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [scheduled, executed, cancelled, failed, completed]
+ *         example: "scheduled"
+ *         description: Filter by agent status
+ *       - in: query
+ *         name: isActive
+ *         required: false
+ *         schema:
+ *           type: boolean
+ *         example: true
+ *         description: Filter by active status
+ *     responses:
+ *       200:
+ *         description: Agents retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         agents:
+ *                           type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/Agent'
+ *                         total:
+ *                           type: integer
+ *                           example: 5
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/:userId', async (req, res, next) => {
   const { userId } = req.params;
@@ -43,8 +97,62 @@ router.get('/:userId', async (req, res, next) => {
 });
 
 /**
- * GET /api/agents/agent/:agentId
- * Get specific agent details
+ * @swagger
+ * /api/agents/agent/{agentId}:
+ *   get:
+ *     summary: Get specific agent details
+ *     description: Retrieves detailed information about a specific agent by ID
+ *     tags: [Agents]
+ *     parameters:
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *         description: Agent ID
+ *     responses:
+ *       200:
+ *         description: Agent details retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         agent:
+ *                           allOf:
+ *                             - $ref: '#/components/schemas/Agent'
+ *                             - type: object
+ *                               properties:
+ *                                 user:
+ *                                   type: object
+ *                                   properties:
+ *                                     id:
+ *                                       type: string
+ *                                       format: uuid
+ *                                     address:
+ *                                       type: string
+ *                                     nickname:
+ *                                       type: string
+ *                                       nullable: true
+ *       404:
+ *         description: Agent not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/agent/:agentId', async (req, res, next) => {
   const { agentId } = req.params;
@@ -83,8 +191,79 @@ router.get('/agent/:agentId', async (req, res, next) => {
 });
 
 /**
- * PUT /api/agents/agent/:agentId
- * Update agent metadata (nickname, description, tags)
+ * @swagger
+ * /api/agents/agent/{agentId}:
+ *   put:
+ *     summary: Update agent metadata
+ *     description: Updates agent metadata including nickname, description, tags, and active status
+ *     tags: [Agents]
+ *     parameters:
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *         description: Agent ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               nickname:
+ *                 type: string
+ *                 example: "My Counter Agent"
+ *                 description: Custom nickname for the agent
+ *               description:
+ *                 type: string
+ *                 example: "Automated counter increment agent"
+ *                 description: Description of the agent's purpose
+ *               tags:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["automation", "counter", "daily"]
+ *                 description: Tags for categorizing the agent
+ *               isActive:
+ *                 type: boolean
+ *                 example: true
+ *                 description: Whether the agent is active
+ *     responses:
+ *       200:
+ *         description: Agent updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         agent:
+ *                           $ref: '#/components/schemas/Agent'
+ *       400:
+ *         description: Invalid request parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Agent not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.put('/agent/:agentId', validateAgentUpdate, validateRequest, async (req, res, next) => {
   const { agentId } = req.params;
@@ -127,8 +306,48 @@ router.put('/agent/:agentId', validateAgentUpdate, validateRequest, async (req, 
 });
 
 /**
- * DELETE /api/agents/agent/:agentId
- * Soft delete an agent (set isActive to false)
+ * @swagger
+ * /api/agents/agent/{agentId}:
+ *   delete:
+ *     summary: Soft delete an agent
+ *     description: Deactivates an agent by setting isActive to false (soft delete)
+ *     tags: [Agents]
+ *     parameters:
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *         description: Agent ID
+ *     responses:
+ *       200:
+ *         description: Agent deactivated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         agent:
+ *                           $ref: '#/components/schemas/Agent'
+ *       404:
+ *         description: Agent not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.delete('/agent/:agentId', async (req, res, next) => {
   const { agentId } = req.params;
@@ -164,8 +383,39 @@ router.delete('/agent/:agentId', async (req, res, next) => {
 });
 
 /**
- * GET /api/agents/stats/:userId
- * Get agent statistics for a user
+ * @swagger
+ * /api/agents/stats/{userId}:
+ *   get:
+ *     summary: Get agent statistics for a user
+ *     description: Retrieves statistical information about agents for a specific user
+ *     tags: [Agents]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: Agent statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/AgentStats'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/stats/:userId', async (req, res, next) => {
   const { userId } = req.params;

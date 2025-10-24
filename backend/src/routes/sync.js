@@ -7,8 +7,49 @@ const router = express.Router();
 const agentScanner = new AgentScannerService();
 
 /**
- * POST /api/sync
- * Smart Scan endpoint - discovers active agents for a user
+ * @swagger
+ * /api/sync:
+ *   post:
+ *     summary: Smart Scan - Discover active agents for a user
+ *     description: Performs a smart scan to discover and synchronize active agents for a Flow address. Uses caching and state reconciliation for optimal performance.
+ *     tags: [Sync]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - address
+ *             properties:
+ *               address:
+ *                 type: string
+ *                 example: "0x1234567890abcdef"
+ *                 description: Flow blockchain address to scan for agents
+ *     responses:
+ *       200:
+ *         description: Smart scan completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/ScanResult'
+ *       400:
+ *         description: Invalid request parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.post('/', validateFlowAddress, validateRequest, async (req, res, next) => {
   const { address } = req.body;
@@ -263,8 +304,66 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
 });
 
 /**
- * GET /api/sync/status/:address
- * Get scan status and history for a user
+ * @swagger
+ * /api/sync/status/{address}:
+ *   get:
+ *     summary: Get scan status and history for a user
+ *     description: Retrieves the current scan status and history for a specific Flow address
+ *     tags: [Sync]
+ *     parameters:
+ *       - in: path
+ *         name: address
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: "0x1234567890abcdef"
+ *         description: Flow blockchain address
+ *     responses:
+ *       200:
+ *         description: Scan status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         user:
+ *                           $ref: '#/components/schemas/User'
+ *                         agents:
+ *                           type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/Agent'
+ *                         scanHistory:
+ *                           type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/ScanHistory'
+ *                         summary:
+ *                           type: object
+ *                           properties:
+ *                             totalAgents:
+ *                               type: integer
+ *                             activeAgents:
+ *                               type: integer
+ *                             lastScan:
+ *                               type: string
+ *                               format: date-time
+ *                               nullable: true
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 router.get('/status/:address', async (req, res, next) => {
   const { address } = req.params;

@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { useFlowCurrentUser } from "@onflow/react-sdk"
+import { useFlowCurrentUser, useDarkMode, Connect, TransactionDialog } from "@onflow/react-sdk"
+import { useTheme } from "@/contexts/theme-context"
 import { backendAPI, type Agent as BackendAgent } from "@/lib/api/client"
-import { transactionService } from "@/lib/flow/transaction-service"
+import { useAgentActions } from "@/lib/flow/agent-hooks"
+import { useAgentScheduledTransactions } from "@/lib/flow/scheduled-transactions"
 import { handleFCLError } from "@/lib/flow/error-handler"
 import { AgentRow } from "@/components/agent-row"
 import { EmptyState } from "@/components/empty-state"
@@ -14,7 +16,6 @@ import { OnboardingConfirmation } from "@/components/onboarding-confirmation"
 import { OnboardingSuccess } from "@/components/onboarding-success"
 import { AgentTemplatesSidebar } from "@/components/agent-template-sidebar"
 import { TemplateConfigPanel } from "@/components/template-config-panel"
-import { WalletPopover } from "@/components/wallet-popover"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
@@ -96,7 +97,27 @@ const mockAgents: Agent[] = [
 
 export function AgentCockpitWrapper() {
   const { user, authenticate } = useFlowCurrentUser()
-  const [theme, setTheme] = useState<"light" | "dark">("dark")
+  const { isDark } = useDarkMode()
+  const { theme, toggleTheme } = useTheme()
+  const {
+    pauseAgent,
+    resumeAgent,
+    deleteAgent,
+    isPausing,
+    isResuming,
+    isDeleting,
+    pauseError,
+    resumeError,
+    deleteError,
+  } = useAgentActions()
+
+  // Get scheduled transactions for the current user
+  const { 
+    agents: scheduledAgents = [], 
+    isLoading: isLoadingScheduled, 
+    error: scheduledError,
+    refetch: refetchScheduled
+  } = useAgentScheduledTransactions(user?.addr)
   
   // Initialize agents from cache
   const cachedAgents = useMemo(() => getCachedAgents(), [])
@@ -113,6 +134,8 @@ export function AgentCockpitWrapper() {
 
   const [templateSidebarOpen, setTemplateSidebarOpen] = useState(false)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [activeTxId, setActiveTxId] = useState<string | null>(null)
+  const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
 
   // Load agents on mount if user is logged in
   useEffect(() => {
@@ -133,32 +156,43 @@ export function AgentCockpitWrapper() {
     
     setIsLoadingAgents(true)
     try {
-      // Smart Scan via backend - discovers agents and stores in DB
-      const syncResult = await backendAPI.syncAgents(user?.addr, forceRefresh)
-      
-      // Map backend agents to frontend format
-      const mappedAgents: Agent[] = syncResult.data.agents.map(agent => ({
-        id: agent.id,
-        name: agent.nickname || `Agent ${agent.id.slice(0, 8)}`,
-        status: agent.status as "active" | "paused" | "scheduled",
-        workflowSummary: agent.description || "Automated agent",
-        schedule: "Scheduled", // This would come from agent data
-        nextRun: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleString() : "Unknown",
-        createdAt: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleDateString() : "Unknown",
-        lastRun: "Unknown", // This would come from agent execution history
-        totalRuns: 0, // This would come from agent execution history
-        successRate: 100, // This would come from agent execution history
-        gasUsed: "0.001 FLOW", // This would come from agent execution history
-        scheduledTxId: agent.scheduledTxId,
-      }))
-      
-      setAgents(mappedAgents)
-      setCachedAgents(mappedAgents) // Update cache
-      
-      toast({
-        title: "Agents Loaded",
-        description: `Found ${mappedAgents.length} agents`,
-      })
+      // Use scheduled transactions from SDK hooks
+      if (scheduledAgents && scheduledAgents.length > 0) {
+        setAgents(scheduledAgents)
+        setCachedAgents(scheduledAgents)
+        
+        toast({
+          title: "Agents Loaded",
+          description: `Found ${scheduledAgents.length} scheduled agents`,
+        })
+      } else {
+        // Fallback to backend sync if no scheduled transactions found
+        const syncResult = await backendAPI.syncAgents(user?.addr, forceRefresh)
+        
+        // Map backend agents to frontend format
+        const mappedAgents: Agent[] = syncResult.data.agents.map(agent => ({
+          id: agent.id,
+          name: agent.nickname || `Agent ${agent.id.slice(0, 8)}`,
+          status: agent.status as "active" | "paused" | "scheduled",
+          workflowSummary: agent.description || "Automated agent",
+          schedule: "Scheduled",
+          nextRun: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleString() : "Unknown",
+          createdAt: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleDateString() : "Unknown",
+          lastRun: "Unknown",
+          totalRuns: 0,
+          successRate: 100,
+          gasUsed: "0.001 FLOW",
+          scheduledTxId: agent.scheduledTxId,
+        }))
+        
+        setAgents(mappedAgents)
+        setCachedAgents(mappedAgents)
+        
+        toast({
+          title: "Agents Loaded",
+          description: `Found ${mappedAgents.length} agents`,
+        })
+      }
     } catch (error) {
       console.error("Failed to load agents:", error)
       toast({
@@ -171,15 +205,8 @@ export function AgentCockpitWrapper() {
     }
   }
 
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light"
-    setTheme(newTheme)
-    document.documentElement.classList.toggle("dark", newTheme === "dark")
-  }
-
-  if (typeof window !== "undefined" && !document.documentElement.classList.contains("dark")) {
-    document.documentElement.classList.add("dark")
-  }
+  // Theme is now controlled by the theme context and FlowProvider's darkMode prop
+  // The FlowProvider will automatically update all SDK components
 
   const handleConnectWallet = async () => {
     try {
@@ -232,13 +259,20 @@ export function AgentCockpitWrapper() {
     const agent = agents.find((a) => a.id === agentId)
     if (!agent || !agent.scheduledTxId) return
 
+    const isPausing = agent.status === "active" || agent.status === "scheduled"
+    
     try {
-      const isPausing = agent.status === "active" || agent.status === "scheduled"
+      // Set up transaction tracking
+      setTransactionDialogOpen(true)
       
-      // Execute transaction via FCL and sync with backend
-      const txId = isPausing
-        ? await transactionService.pauseAgent(agentId, agent.scheduledTxId)
-        : await transactionService.resumeAgent(agentId, agent.scheduledTxId)
+      let txId: string
+      if (isPausing) {
+        txId = await pauseAgent(agentId, agent.scheduledTxId)
+        setActiveTxId(txId)
+      } else {
+        txId = await resumeAgent(agentId, agent.scheduledTxId)
+        setActiveTxId(txId)
+      }
 
       // Update local state
       setAgents((prev) =>
@@ -251,7 +285,7 @@ export function AgentCockpitWrapper() {
 
       toast({
         title: "Success",
-        description: `Agent ${isPausing ? "paused" : "resumed"} (Tx: ${txId.slice(0, 8)}...)`,
+        description: `Agent ${isPausing ? "paused" : "resumed"} successfully`,
       })
     } catch (error: any) {
       console.error("Transaction error:", error)
@@ -276,16 +310,17 @@ export function AgentCockpitWrapper() {
     if (!agent || !agent.scheduledTxId) return
 
     try {
-      const txId = await transactionService.deleteAgent(
-        selectedAgentId,
-        agent.scheduledTxId
-      )
+      // Set up transaction tracking
+      setTransactionDialogOpen(true)
+      
+      const txId = await deleteAgent(selectedAgentId, agent.scheduledTxId)
+      setActiveTxId(txId)
 
       setAgents((prev) => prev.filter((a) => a.id !== selectedAgentId))
 
       toast({
         title: "Agent Deleted",
-        description: `Successfully deleted agent (Tx: ${txId.slice(0, 8)}...)`,
+        description: "Successfully deleted agent",
       })
     } catch (error: any) {
       console.error("Delete error:", error)
@@ -418,7 +453,21 @@ export function AgentCockpitWrapper() {
               <Button variant="outline" size="icon" onClick={toggleTheme}>
                 {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
               </Button>
-              <WalletPopover />
+              <Connect 
+                onConnect={() => {
+                  toast({
+                    title: "Wallet Connected",
+                    description: "Successfully connected to Flow network",
+                  })
+                }}
+                onDisconnect={() => {
+                  toast({
+                    title: "Wallet Disconnected",
+                    description: "You have been logged out",
+                  })
+                }}
+                variant="outline"
+              />
             </div>
           </div>
         </header>
@@ -500,6 +549,22 @@ export function AgentCockpitWrapper() {
         )}
 
         <Toaster />
+
+        {/* Transaction Status Dialog */}
+        <TransactionDialog
+          open={transactionDialogOpen}
+          onOpenChange={setTransactionDialogOpen}
+          txId={activeTxId || undefined}
+          pendingTitle="Processing Transaction"
+          pendingDescription="Your agent action is being processed on the Flow network"
+          successTitle="Transaction Complete"
+          successDescription="Your agent has been updated successfully"
+          closeOnSuccess={true}
+          onSuccess={() => {
+            // Refresh agents list when transaction completes
+            loadAgents(true)
+          }}
+        />
       </div>
     </>
   )

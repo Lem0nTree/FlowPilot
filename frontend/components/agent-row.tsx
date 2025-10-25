@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, ChevronUp, Play, Pause, MoreVertical, Trash2, Edit } from "lucide-react"
+import { TransactionButton, TransactionLink } from "@onflow/react-sdk"
+import { ChevronDown, ChevronUp, Play, Pause, MoreVertical, Trash2, Edit, ExternalLink } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
@@ -18,6 +19,7 @@ type Agent = {
   totalRuns: number
   successRate: number
   gasUsed: string
+  scheduledTxId?: string
 }
 
 type AgentRowProps = {
@@ -70,19 +72,41 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-1">
-            <Button
+            <TransactionButton
+              transaction={{
+                cadence: agent.status === "active" || agent.status === "scheduled" 
+                  ? `import FlowTransactionScheduler from 0xFlowTransactionScheduler
+                     transaction(scheduledTxId: String) {
+                       prepare(signer: auth(Storage) &Account) {
+                         let scheduler = FlowTransactionScheduler.getScheduler()
+                         scheduler.cancel(id: scheduledTxId)
+                       }
+                     }`
+                  : `import FlowTransactionScheduler from 0xFlowTransactionScheduler
+                     transaction(scheduledTxId: String) {
+                       prepare(signer: auth(Storage) &Account) {
+                         // Resume logic here
+                       }
+                     }`,
+                args: (arg, t) => [arg(agent.scheduledTxId || "", t.String)],
+                limit: 9999,
+              }}
+              label={agent.status === "active" || agent.status === "scheduled" ? "Pause" : "Resume"}
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={() => onToggleStatus(agent.id)}
               title={
                 agent.status === "active" ? "Pause agent" : 
                 agent.status === "scheduled" ? "Pause agent" : 
                 "Resume agent"
               }
+              mutation={{
+                onSuccess: () => onToggleStatus(agent.id),
+                onError: (error) => console.error("Transaction failed:", error)
+              }}
             >
               {agent.status === "active" || agent.status === "scheduled" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </Button>
+            </TransactionButton>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -133,6 +157,19 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
               <p className="text-xs text-muted-foreground">Workflow Details</p>
               <p className="text-sm font-medium text-foreground">{agent.workflowSummary}</p>
             </div>
+            {agent.scheduledTxId && (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Last Transaction</p>
+                <TransactionLink 
+                  txId={agent.scheduledTxId}
+                  variant="link"
+                  className="text-xs text-primary hover:text-primary/80"
+                >
+                  <ExternalLink className="mr-1 h-3 w-3 inline" />
+                  View on Explorer
+                </TransactionLink>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons in Expanded View */}

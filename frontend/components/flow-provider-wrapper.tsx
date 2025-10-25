@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { FlowProvider } from "@onflow/react-sdk"
+import { useTheme } from "@/contexts/theme-context"
 import flowJSON from "../../flow.json"
 
 interface FlowProviderWrapperProps {
@@ -9,6 +10,7 @@ interface FlowProviderWrapperProps {
 }
 
 export function FlowProviderWrapper({ children }: FlowProviderWrapperProps) {
+  const { theme } = useTheme()
   const [isClient, setIsClient] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
 
@@ -35,20 +37,22 @@ export function FlowProviderWrapper({ children }: FlowProviderWrapperProps) {
   }
 
   return (
-    <FlowProvider
-      config={{
-        accessNodeUrl: 'https://rest-testnet.onflow.org',
-        flowNetwork: 'testnet',
-        appDetailTitle: 'FlowPilot Agent Cockpit',
-        appDetailIcon: 'https://flowpilot.app/icon.png',
-        appDetailDescription: 'Manage your on-chain automation agents',
-        appDetailUrl: 'https://flowpilot.app',
-        discoveryWallet: 'https://fcl-discovery.onflow.org/testnet/authn',
-        walletconnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '20011d073e05a979e592a9faa846bfab',
-      }}
-      flowJson={flowJSON}
-    >
-      {children}
-    </FlowProvider>
+    <div className={theme === "dark" ? "dark" : ""}>
+      <FlowProvider
+        config={{
+          accessNodeUrl: 'https://rest-testnet.onflow.org',
+          flowNetwork: 'testnet',
+          appDetailTitle: 'FlowPilot Agent Cockpit',
+          appDetailIcon: 'https://flowpilot.app/icon.png',
+          appDetailDescription: 'Manage your on-chain automation agents',
+          appDetailUrl: 'https://flowpilot.app',
+          discoveryWallet: 'https://fcl-discovery.onflow.org/testnet/authn',
+          walletconnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '20011d073e05a979e592a9faa846bfab',
+        }}
+        flowJson={flowJSON}
+      >
+        {children}
+      </FlowProvider>
+    </div>
   )
 }

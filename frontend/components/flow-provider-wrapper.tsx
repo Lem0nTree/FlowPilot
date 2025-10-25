@@ -44,7 +44,7 @@ export function FlowProviderWrapper({ children }: FlowProviderWrapperProps) {
         appDetailDescription: 'Manage your on-chain automation agents',
         appDetailUrl: 'https://flowpilot.app',
         discoveryWallet: 'https://fcl-discovery.onflow.org/testnet/authn',
-        walletConnectProjectId: '20011d073e05a979e592a9faa846bfab',
+        walletconnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '20011d073e05a979e592a9faa846bfab',
       }}
       flowJson={flowJSON}
     >

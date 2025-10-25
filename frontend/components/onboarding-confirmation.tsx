@@ -13,9 +13,10 @@ type OnboardingConfirmationProps = {
   open: boolean
   discoveredAgents: DiscoveredAgent[]
   onConfirm: (agents: DiscoveredAgent[]) => void
+  onClose: () => void
 }
 
-export function OnboardingConfirmation({ open, discoveredAgents, onConfirm }: OnboardingConfirmationProps) {
+export function OnboardingConfirmation({ open, discoveredAgents, onConfirm, onClose }: OnboardingConfirmationProps) {
   const [agents, setAgents] = useState<DiscoveredAgent[]>(discoveredAgents)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -61,8 +62,8 @@ export function OnboardingConfirmation({ open, discoveredAgents, onConfirm }: On
   const isValid = agents.every((agent) => agent.nickname.trim() && agent.storagePath.trim())
 
   return (
-    <Dialog open={open}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col" hideClose>
+    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-2xl">
             We found {discoveredAgents.length} {discoveredAgents.length === 1 ? "agent" : "agents"}!

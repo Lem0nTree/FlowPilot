@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button"
 type OnboardingSuccessProps = {
   open: boolean
   onComplete: () => void
+  onClose: () => void
 }
 
-export function OnboardingSuccess({ open, onComplete }: OnboardingSuccessProps) {
+export function OnboardingSuccess({ open, onComplete, onClose }: OnboardingSuccessProps) {
   return (
-    <Dialog open={open}>
-      <DialogContent className="sm:max-w-md" hideClose>
+    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
         <div className="flex flex-col items-center justify-center py-8 space-y-6">
           {/* Success Icon */}
           <div className="relative">

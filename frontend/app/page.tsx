@@ -357,8 +357,13 @@ export default function AgentCockpit() {
         open={onboardingStep === "confirmation"}
         discoveredAgents={discoveredAgents}
         onConfirm={handleConfirmationComplete}
+        onClose={() => setOnboardingStep("complete")}
       />
-      <OnboardingSuccess open={onboardingStep === "success"} onComplete={handleOnboardingComplete} />
+      <OnboardingSuccess 
+        open={onboardingStep === "success"} 
+        onComplete={handleOnboardingComplete}
+        onClose={() => setOnboardingStep("complete")}
+      />
 
       <div className="min-h-screen bg-background">
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -386,7 +391,10 @@ export default function AgentCockpit() {
           {isLoadingAgents && agents.length === 0 ? (
             <LoadingState />
           ) : agents.length === 0 ? (
-            <EmptyState onBuildAgent={handleManualImport} />
+            <EmptyState 
+              onBuildAgent={handleBuildAgent}      // Primary button - will navigate to builder
+              onImportAgent={handleManualImport}   // Secondary button - triggers import popup
+            />
           ) : (
             <>
               {/* Show subtle loading indicator when refreshing */}

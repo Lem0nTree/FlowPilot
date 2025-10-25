@@ -30,11 +30,11 @@ export interface SyncResponse {
 
 export const backendAPI = {
   // Smart Scan - discovers agents via Find Labs API
-  async syncAgents(address: string): Promise<SyncResponse> {
+  async syncAgents(address: string, forceRefresh = false): Promise<SyncResponse> {
     const response = await fetch(`${API_BASE_URL}/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address }),
+      body: JSON.stringify({ address, forceRefresh }),
     })
     if (!response.ok) throw new Error("Sync failed")
     return response.json()

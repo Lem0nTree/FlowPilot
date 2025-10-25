@@ -15,7 +15,7 @@ import { OnboardingSuccess } from "@/components/onboarding-success"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
-import { Wallet, Plus, Sun, Moon } from "lucide-react"
+import { Wallet, Plus, Sun, Moon, RefreshCw, Loader2 } from "lucide-react"
 
 type Agent = {
   id: string
@@ -30,6 +30,23 @@ type Agent = {
   successRate: number
   gasUsed: string
   scheduledTxId?: string
+}
+
+// Cache key constants
+const AGENTS_CACHE_KEY = "flowpilot-agents-cache"
+const CACHE_TIMESTAMP_KEY = "flowpilot-cache-timestamp"
+
+// Helper functions
+const getCachedAgents = (): Agent[] => {
+  if (typeof window === "undefined") return []
+  const cached = localStorage.getItem(AGENTS_CACHE_KEY)
+  return cached ? JSON.parse(cached) : []
+}
+
+const setCachedAgents = (agents: Agent[]) => {
+  if (typeof window === "undefined") return
+  localStorage.setItem(AGENTS_CACHE_KEY, JSON.stringify(agents))
+  localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString())
 }
 
 const mockAgents: Agent[] = [
@@ -77,8 +94,12 @@ const mockAgents: Agent[] = [
 export default function AgentCockpit() {
   const { user, isLoading: isConnecting, connect } = useFlow()
   const [theme, setTheme] = useState<"light" | "dark">("dark")
-  const [agents, setAgents] = useState<Agent[]>([])
+  
+  // Initialize agents from cache
+  const cachedAgents = useMemo(() => getCachedAgents(), [])
+  const [agents, setAgents] = useState<Agent[]>(cachedAgents)
   const [isLoadingAgents, setIsLoadingAgents] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const { toast } = useToast()
@@ -87,29 +108,27 @@ export default function AgentCockpit() {
   const [discoveredAgents, setDiscoveredAgents] = useState<DiscoveredAgent[]>([])
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true)
 
-  // Load agents from backend when user connects
+  // Load agents on mount if user is logged in
   useEffect(() => {
     if (user.loggedIn && user.addr) {
-      loadAgents()
+      // Only fetch if cache is empty or stale (older than 5 minutes)
+      const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY)
+      const isStale = !cacheTimestamp || 
+        (Date.now() - parseInt(cacheTimestamp)) > 5 * 60 * 1000
+      
+      if (cachedAgents.length === 0 || isStale) {
+        loadAgents(false)
+      }
     }
-  }, [user.loggedIn, user.addr])
+  }, [user.loggedIn, user.addr, cachedAgents.length])
 
-  // Simulate first-time user detection
-  useEffect(() => {
-    const hasOnboarded = localStorage.getItem("flowpilot-onboarded")
-    if (!hasOnboarded && user.loggedIn) {
-      setHasCompletedOnboarding(false)
-      setOnboardingStep("welcome")
-    }
-  }, [user.loggedIn])
-
-  const loadAgents = async () => {
+  const loadAgents = async (forceRefresh = false) => {
     if (!user.addr) return
     
     setIsLoadingAgents(true)
     try {
       // Smart Scan via backend - discovers agents and stores in DB
-      const syncResult = await backendAPI.syncAgents(user.addr)
+      const syncResult = await backendAPI.syncAgents(user.addr, forceRefresh)
       
       // Map backend agents to frontend format
       const mappedAgents: Agent[] = syncResult.data.agents.map(agent => ({
@@ -128,6 +147,7 @@ export default function AgentCockpit() {
       }))
       
       setAgents(mappedAgents)
+      setCachedAgents(mappedAgents) // Update cache
       
       toast({
         title: "Agents Loaded",
@@ -282,6 +302,29 @@ export default function AgentCockpit() {
     })
   }
 
+  const handleManualImport = () => {
+    setOnboardingStep("welcome")
+  }
+
+  const handleForceRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await loadAgents(true) // Force refresh
+      toast({
+        title: "Refreshed",
+        description: "Agents list updated from blockchain",
+      })
+    } catch (error) {
+      toast({
+        title: "Refresh Failed",
+        description: "Could not refresh agents",
+        variant: "destructive",
+      })
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   if (!user.loggedIn) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -308,7 +351,7 @@ export default function AgentCockpit() {
       <OnboardingWelcome
         open={onboardingStep === "welcome"}
         onComplete={handleWelcomeComplete}
-        onClose={handleSkipOnboarding}
+        onClose={() => setOnboardingStep("complete")}
       />
       <OnboardingConfirmation
         open={onboardingStep === "confirmation"}
@@ -340,33 +383,54 @@ export default function AgentCockpit() {
         </header>
 
         <main className="container mx-auto px-6 py-8">
-          {isLoadingAgents ? (
+          {isLoadingAgents && agents.length === 0 ? (
             <LoadingState />
           ) : agents.length === 0 ? (
-            <EmptyState onBuildAgent={handleBuildAgent} />
+            <EmptyState onBuildAgent={handleManualImport} />
           ) : (
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-              {/* Table Header */}
-              <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-sm font-medium text-muted-foreground">
-                <div className="col-span-3">Agent Name</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-3">Workflow</div>
-                <div className="col-span-2">Schedule</div>
-                <div className="col-span-2">Next Run</div>
-              </div>
+            <>
+              {/* Show subtle loading indicator when refreshing */}
+              {isLoadingAgents && (
+                <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">Syncing agents...</span>
+                </div>
+              )}
+              
+              <div className="bg-card border border-border rounded-lg overflow-hidden">
+                {/* Table Header */}
+                <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-sm font-medium text-muted-foreground">
+                  <div className="col-span-3">Agent Name</div>
+                  <div className="col-span-2">Status</div>
+                  <div className="col-span-3">Workflow</div>
+                  <div className="col-span-2">Schedule</div>
+                  <div className="col-span-2">Next Run</div>
+                </div>
 
-              {/* Agent Rows */}
-              <div className="divide-y divide-border">
-                {agents.map((agent) => (
-                  <AgentRow
-                    key={agent.id}
-                    agent={agent}
-                    onToggleStatus={handleToggleStatus}
-                    onDelete={handleDeleteClick}
-                  />
-                ))}
+                {/* Agent Rows */}
+                <div className="divide-y divide-border">
+                  {agents.map((agent) => (
+                    <AgentRow
+                      key={agent.id}
+                      agent={agent}
+                      onToggleStatus={handleToggleStatus}
+                      onDelete={handleDeleteClick}
+                    />
+                  ))}
+                  
+                  {/* Manual Import Row */}
+                  <button
+                    onClick={handleManualImport}
+                    className="w-full px-6 py-4 flex items-center gap-3 text-left hover:bg-muted/50 transition-colors group"
+                  >
+                    <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                      Import an agent manually
+                    </span>
+                  </button>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </main>
 
@@ -376,6 +440,20 @@ export default function AgentCockpit() {
           onConfirm={handleDeleteConfirm}
           agentName={agents.find((a) => a.id === selectedAgentId)?.name || ""}
         />
+
+        {/* Floating Refresh Button */}
+        {user.loggedIn && (
+          <button
+            onClick={handleForceRefresh}
+            disabled={isRefreshing}
+            className="fixed bottom-6 right-6 bg-primary text-primary-foreground rounded-full p-4 shadow-lg hover:shadow-xl transition-all hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed z-50"
+            title="Refresh agents from blockchain"
+          >
+            <RefreshCw 
+              className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`} 
+            />
+          </button>
+        )}
 
         <Toaster />
       </div>

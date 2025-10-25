@@ -11,11 +11,11 @@ const agentScanner = new AgentScannerService();
  * Smart Scan endpoint - discovers active agents for a user
  */
 router.post('/', validateFlowAddress, validateRequest, async (req, res, next) => {
-  const { address } = req.body;
+  const { address, forceRefresh } = req.body;
   const SYNC_INTERVAL_MINUTES = parseInt(process.env.SYNC_CACHE_INTERVAL_MINUTES) || 5;
   
   try {
-    console.log(`🔄 Starting Smart Scan for address: ${address}`);
+    console.log(`🔄 Starting Smart Scan for address: ${address} (forceRefresh: ${forceRefresh})`);
     
     // 1. Find or create the user in a single, atomic operation
     const user = await prisma.user.upsert({
@@ -25,57 +25,59 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
     });
     console.log(`👤 User processed with ID: ${user.id}`);
 
-    // 2. Check for recent successful scan (Time-based Caching)
-    const lastScan = await prisma.scanHistory.findFirst({
-      where: { 
-        userAddress: address, 
-        success: true 
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // 2. Check for recent successful scan (Time-based Caching) - Skip if forceRefresh is true
+    if (!forceRefresh) {
+      const lastScan = await prisma.scanHistory.findFirst({
+        where: { 
+          userAddress: address, 
+          success: true 
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
-    if (lastScan) {
-      const timeSinceLastScan = (new Date() - lastScan.createdAt) / (1000 * 60);
-      if (timeSinceLastScan < SYNC_INTERVAL_MINUTES) {
-        console.log(`🔄 Sync skipped: Last scan was ${timeSinceLastScan.toFixed(1)} mins ago.`);
-        
-        // Return cached data from our database
-        const cachedAgents = await prisma.agent.findMany({ 
-          where: { 
-            ownerAddress: address,
-            isActive: true 
-          },
-          orderBy: { createdAt: 'desc' }
-        });
-
-        return res.status(200).json({
-          success: true,
-          message: 'Synced from local cache',
-          data: {
-            user: {
-              id: user.id,
-              address: user.address,
-              nickname: user.nickname
+      if (lastScan) {
+        const timeSinceLastScan = (new Date() - lastScan.createdAt) / (1000 * 60);
+        if (timeSinceLastScan < SYNC_INTERVAL_MINUTES) {
+          console.log(`🔄 Sync skipped: Last scan was ${timeSinceLastScan.toFixed(1)} mins ago.`);
+          
+          // Return cached data from our database
+          const cachedAgents = await prisma.agent.findMany({ 
+            where: { 
+              ownerAddress: address,
+              isActive: true 
             },
-            agents: cachedAgents.map(agent => ({
-              id: agent.id,
-              scheduledTxId: agent.scheduledTxId,
-              handlerContract: agent.handlerContract,
-              status: agent.status,
-              scheduledAt: agent.scheduledAt,
-              nickname: agent.nickname,
-              description: agent.description,
-              tags: agent.tags,
-              isActive: agent.isActive
-            })),
-            scanSummary: {
-              totalFound: cachedAgents.length,
-              processed: cachedAgents.length,
-              scannedAt: lastScan.createdAt,
-              cached: true
+            orderBy: { createdAt: 'desc' }
+          });
+
+          return res.status(200).json({
+            success: true,
+            message: 'Synced from local cache',
+            data: {
+              user: {
+                id: user.id,
+                address: user.address,
+                nickname: user.nickname
+              },
+              agents: cachedAgents.map(agent => ({
+                id: agent.id,
+                scheduledTxId: agent.scheduledTxId,
+                handlerContract: agent.handlerContract,
+                status: agent.status,
+                scheduledAt: agent.scheduledAt,
+                nickname: agent.nickname,
+                description: agent.description,
+                tags: agent.tags,
+                isActive: agent.isActive
+              })),
+              scanSummary: {
+                totalFound: cachedAgents.length,
+                processed: cachedAgents.length,
+                scannedAt: lastScan.createdAt,
+                cached: true
+              }
             }
-          }
-        });
+          });
+        }
       }
     }
 

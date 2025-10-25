@@ -2,10 +2,10 @@
 // Actual Cadence code will depend on your deployed contracts
 
 export const PAUSE_AGENT_TRANSACTION = `
-import FlowTransactionScheduler from 0xFlowTransactionScheduler
+import "FlowTransactionScheduler"
 
 transaction(scheduledTxId: String) {
-  prepare(signer: AuthAccount) {
+  prepare(signer: auth(Storage) &Account) {
     // Get the scheduled transaction and cancel it
     let scheduler = FlowTransactionScheduler.getScheduler()
     scheduler.cancel(id: scheduledTxId)
@@ -14,10 +14,10 @@ transaction(scheduledTxId: String) {
 `
 
 export const RESUME_AGENT_TRANSACTION = `
-import FlowTransactionScheduler from 0xFlowTransactionScheduler
+import "FlowTransactionScheduler"
 
 transaction(scheduledTxId: String) {
-  prepare(signer: AuthAccount) {
+  prepare(signer: auth(Storage) &Account) {
     // Reschedule the transaction
     // Implementation depends on your agent contract design
   }
@@ -25,10 +25,10 @@ transaction(scheduledTxId: String) {
 `
 
 export const DELETE_AGENT_TRANSACTION = `
-import FlowTransactionScheduler from 0xFlowTransactionScheduler
+import "FlowTransactionScheduler"
 
 transaction(scheduledTxId: String) {
-  prepare(signer: AuthAccount) {
+  prepare(signer: auth(Storage) &Account) {
     // Cancel and remove the scheduled transaction
     let scheduler = FlowTransactionScheduler.getScheduler()
     scheduler.cancel(id: scheduledTxId)

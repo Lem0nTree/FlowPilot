@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Loader2 } from "lucide-react"
 import { backendAPI } from "@/lib/api/client"
-import { useFlow } from "@/lib/flow/FlowProvider"
+import { useFlowCurrentUser } from "@onflow/react-sdk"
 import { useToast } from "@/hooks/use-toast"
 
 type OnboardingWelcomeProps = {
@@ -21,21 +21,21 @@ export type DiscoveredAgent = {
 }
 
 export function OnboardingWelcome({ open, onComplete, onClose }: OnboardingWelcomeProps) {
-  const { user } = useFlow()
+  const { user } = useFlowCurrentUser()
   const { toast } = useToast()
   const [isScanning, setIsScanning] = useState(true)
 
   useEffect(() => {
-    if (open && user.addr) {
+    if (open && user?.addr) {
       performScan()
     }
-  }, [open, user.addr])
+  }, [open, user?.addr])
 
   const performScan = async () => {
     setIsScanning(true)
     try {
       // Call backend Smart Scan API
-      const result = await backendAPI.syncAgents(user.addr!)
+      const result = await backendAPI.syncAgents(user?.addr!)
       
       // Map backend agents to onboarding format
       const discoveredAgents: DiscoveredAgent[] = result.data.agents.map(agent => ({

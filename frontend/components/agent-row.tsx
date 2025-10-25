@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 type Agent = {
   id: string
   name: string
-  status: "active" | "paused"
+  status: "active" | "paused" | "scheduled"
   workflowSummary: string
   schedule: string
   nextRun: string
@@ -46,7 +46,9 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
           <div
             className={cn(
               "h-2 w-2 rounded-full",
-              agent.status === "active" ? "bg-primary animate-pulse" : "bg-muted-foreground",
+              agent.status === "active" ? "bg-primary animate-pulse" : 
+              agent.status === "scheduled" ? "bg-blue-500 animate-pulse" : 
+              "bg-muted-foreground",
             )}
           />
           <span className="text-sm capitalize text-foreground">{agent.status}</span>
@@ -73,9 +75,13 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
               size="icon"
               className="h-8 w-8"
               onClick={() => onToggleStatus(agent.id)}
-              title={agent.status === "active" ? "Pause agent" : "Resume agent"}
+              title={
+                agent.status === "active" ? "Pause agent" : 
+                agent.status === "scheduled" ? "Pause agent" : 
+                "Resume agent"
+              }
             >
-              {agent.status === "active" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              {agent.status === "active" || agent.status === "scheduled" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </Button>
 
             <DropdownMenu>

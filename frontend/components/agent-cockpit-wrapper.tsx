@@ -12,6 +12,8 @@ import { DeleteConfirmModal } from "@/components/delete-confirm-modal"
 import { OnboardingWelcome, type DiscoveredAgent } from "@/components/onboarding-welcome"
 import { OnboardingConfirmation } from "@/components/onboarding-confirmation"
 import { OnboardingSuccess } from "@/components/onboarding-success"
+import { AgentTemplatesSidebar } from "@/components/agent-template-sidebar"
+import { TemplateConfigPanel } from "@/components/template-config-panel"
 import { WalletPopover } from "@/components/wallet-popover"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
@@ -108,6 +110,9 @@ export function AgentCockpitWrapper() {
   const [onboardingStep, setOnboardingStep] = useState<"welcome" | "confirmation" | "success" | "complete">("complete")
   const [discoveredAgents, setDiscoveredAgents] = useState<DiscoveredAgent[]>([])
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true)
+
+  const [templateSidebarOpen, setTemplateSidebarOpen] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
 
   // Load agents on mount if user is logged in
   useEffect(() => {
@@ -297,10 +302,30 @@ export function AgentCockpitWrapper() {
   }
 
   const handleBuildAgent = () => {
+    setTemplateSidebarOpen(true)
+  }
+
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId)
+  }
+
+  const handleBackToTemplates = () => {
+    setSelectedTemplateId(null)
+  }
+
+  const handleCloseSidebar = () => {
+    setTemplateSidebarOpen(false)
+    setSelectedTemplateId(null)
+  }
+
+  const handleCreateAgent = (config: any) => {
+    console.log("[FlowPilot] Creating agent with config:", config)
     toast({
-      title: "Coming Soon",
-      description: "Agent builder will be available soon",
+      title: "Agent Created",
+      description: "Your automated agent has been created successfully",
     })
+    handleCloseSidebar()
+    // TODO: Integrate with actual agent creation logic
   }
 
   const handleManualImport = () => {
@@ -366,11 +391,23 @@ export function AgentCockpitWrapper() {
         onClose={() => setOnboardingStep("complete")}
       />
 
+      <AgentTemplatesSidebar
+        open={templateSidebarOpen && !selectedTemplateId}
+        onClose={handleCloseSidebar}
+        onSelectTemplate={handleSelectTemplate}
+      />
+      <TemplateConfigPanel
+        open={templateSidebarOpen && !!selectedTemplateId}
+        templateId={selectedTemplateId || ""}
+        onBack={handleBackToTemplates}
+        onCreate={handleCreateAgent}
+      />
+
       <div className="min-h-screen bg-background">
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
           <div className="container mx-auto px-6 py-4 flex items-center justify-between">
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold text-foreground">Agent Cockpit</h1>
+              <h1 className="text-2xl font-semibold text-foreground">Flow Pilot Dashboard</h1>
               <p className="text-sm text-muted-foreground">Manage your on-chain automations</p>
             </div>
             <div className="flex items-center gap-3">

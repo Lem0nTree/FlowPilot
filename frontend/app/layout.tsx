@@ -2,6 +2,7 @@ import type React from "react"
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
+import { FlowProvider } from "@/lib/flow/FlowProvider"
 import "./globals.css"
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -24,10 +25,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans ${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased`}>
-        <Suspense fallback={<div>Loading...</div>}>
-          {children}
-          <Analytics />
-        </Suspense>
+        <FlowProvider>
+          <Suspense fallback={<div>Loading...</div>}>
+            {children}
+            <Analytics />
+          </Suspense>
+        </FlowProvider>
       </body>
     </html>
   )

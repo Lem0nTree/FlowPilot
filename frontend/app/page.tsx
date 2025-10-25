@@ -1,6 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { useFlow } from "@/lib/flow/FlowProvider"
+import { backendAPI, type Agent as BackendAgent } from "@/lib/api/client"
+import { transactionService } from "@/lib/flow/transaction-service"
+import { handleFCLError } from "@/lib/flow/error-handler"
 import { AgentRow } from "@/components/agent-row"
 import { EmptyState } from "@/components/empty-state"
 import { LoadingState } from "@/components/loading-state"
@@ -16,7 +20,7 @@ import { Wallet, Plus, Sun, Moon } from "lucide-react"
 type Agent = {
   id: string
   name: string
-  status: "active" | "paused"
+  status: "active" | "paused" | "scheduled"
   workflowSummary: string
   schedule: string
   nextRun: string
@@ -25,6 +29,7 @@ type Agent = {
   totalRuns: number
   successRate: number
   gasUsed: string
+  scheduledTxId?: string
 }
 
 const mockAgents: Agent[] = [
@@ -70,10 +75,10 @@ const mockAgents: Agent[] = [
 ]
 
 export default function AgentCockpit() {
+  const { user, isLoading: isConnecting, connect } = useFlow()
   const [theme, setTheme] = useState<"light" | "dark">("dark")
-  const [isConnected, setIsConnected] = useState(true)
-  const [isLoading, setIsLoading] = useState(false)
-  const [agents, setAgents] = useState<Agent[]>(mockAgents)
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   const { toast } = useToast()
@@ -82,14 +87,63 @@ export default function AgentCockpit() {
   const [discoveredAgents, setDiscoveredAgents] = useState<DiscoveredAgent[]>([])
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true)
 
+  // Load agents from backend when user connects
+  useEffect(() => {
+    if (user.loggedIn && user.addr) {
+      loadAgents()
+    }
+  }, [user.loggedIn, user.addr])
+
   // Simulate first-time user detection
   useEffect(() => {
     const hasOnboarded = localStorage.getItem("flowpilot-onboarded")
-    if (!hasOnboarded && isConnected) {
+    if (!hasOnboarded && user.loggedIn) {
       setHasCompletedOnboarding(false)
       setOnboardingStep("welcome")
     }
-  }, [isConnected])
+  }, [user.loggedIn])
+
+  const loadAgents = async () => {
+    if (!user.addr) return
+    
+    setIsLoadingAgents(true)
+    try {
+      // Smart Scan via backend - discovers agents and stores in DB
+      const syncResult = await backendAPI.syncAgents(user.addr)
+      
+      // Map backend agents to frontend format
+      const mappedAgents: Agent[] = syncResult.data.agents.map(agent => ({
+        id: agent.id,
+        name: agent.nickname || `Agent ${agent.id.slice(0, 8)}`,
+        status: agent.status === "scheduled" ? "active" : agent.status as "active" | "paused",
+        workflowSummary: agent.description || "Automated agent",
+        schedule: "Scheduled", // This would come from agent data
+        nextRun: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleString() : "Unknown",
+        createdAt: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleDateString() : "Unknown",
+        lastRun: "Unknown", // This would come from agent execution history
+        totalRuns: 0, // This would come from agent execution history
+        successRate: 100, // This would come from agent execution history
+        gasUsed: "0.001 FLOW", // This would come from agent execution history
+        scheduledTxId: agent.scheduledTxId,
+      }))
+      
+      setAgents(mappedAgents)
+      
+      toast({
+        title: "Agents Loaded",
+        description: `Found ${mappedAgents.length} agents`,
+      })
+    } catch (error) {
+      console.error("Failed to load agents:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load agents",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingAgents(false)
+    }
+  }
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light"
@@ -101,16 +155,21 @@ export default function AgentCockpit() {
     document.documentElement.classList.add("dark")
   }
 
-  const handleConnectWallet = () => {
-    setIsLoading(true)
-    setTimeout(() => {
-      setIsConnected(true)
-      setIsLoading(false)
+  const handleConnectWallet = async () => {
+    try {
+      await connect()
       toast({
         title: "Wallet Connected",
-        description: "Successfully connected to Flow blockchain",
+        description: `Connected to ${user.addr}`,
       })
-    }, 1500)
+    } catch (error) {
+      console.error("Wallet connection error:", error)
+      toast({
+        title: "Connection Failed",
+        description: "Could not connect wallet",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleWelcomeComplete = (discovered: DiscoveredAgent[]) => {
@@ -143,23 +202,40 @@ export default function AgentCockpit() {
     })
   }
 
-  const handleToggleStatus = (agentId: string) => {
-    setAgents((prev) =>
-      prev.map((agent) =>
-        agent.id === agentId
-          ? {
-              ...agent,
-              status: agent.status === "active" ? "paused" : "active",
-              nextRun: agent.status === "active" ? "Paused" : "In 3 days, 4 hours",
-            }
-          : agent,
-      ),
-    )
+  const handleToggleStatus = async (agentId: string) => {
     const agent = agents.find((a) => a.id === agentId)
-    toast({
-      title: agent?.status === "active" ? "Agent Paused" : "Agent Resumed",
-      description: `${agent?.name} has been ${agent?.status === "active" ? "paused" : "resumed"}`,
-    })
+    if (!agent || !agent.scheduledTxId) return
+
+    try {
+      const isPausing = agent.status === "active" || agent.status === "scheduled"
+      
+      // Execute transaction via FCL and sync with backend
+      const txId = isPausing
+        ? await transactionService.pauseAgent(agentId, agent.scheduledTxId)
+        : await transactionService.resumeAgent(agentId, agent.scheduledTxId)
+
+      // Update local state
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === agentId
+            ? { ...a, status: isPausing ? "paused" : "active" }
+            : a
+        )
+      )
+
+      toast({
+        title: "Success",
+        description: `Agent ${isPausing ? "paused" : "resumed"} (Tx: ${txId.slice(0, 8)}...)`,
+      })
+    } catch (error: any) {
+      console.error("Transaction error:", error)
+      const { title, description } = handleFCLError(error)
+      toast({
+        title,
+        description,
+        variant: "destructive",
+      })
+    }
   }
 
   const handleDeleteClick = (agentId: string) => {
@@ -167,15 +243,33 @@ export default function AgentCockpit() {
     setDeleteModalOpen(true)
   }
 
-  const handleDeleteConfirm = () => {
-    if (selectedAgentId) {
-      const agent = agents.find((a) => a.id === selectedAgentId)
+  const handleDeleteConfirm = async () => {
+    if (!selectedAgentId) return
+    
+    const agent = agents.find((a) => a.id === selectedAgentId)
+    if (!agent || !agent.scheduledTxId) return
+
+    try {
+      const txId = await transactionService.deleteAgent(
+        selectedAgentId,
+        agent.scheduledTxId
+      )
+
       setAgents((prev) => prev.filter((a) => a.id !== selectedAgentId))
+
       toast({
         title: "Agent Deleted",
-        description: `${agent?.name} has been permanently deleted`,
+        description: `Successfully deleted agent (Tx: ${txId.slice(0, 8)}...)`,
+      })
+    } catch (error: any) {
+      console.error("Delete error:", error)
+      const { title, description } = handleFCLError(error)
+      toast({
+        title,
+        description,
         variant: "destructive",
       })
+    } finally {
       setDeleteModalOpen(false)
       setSelectedAgentId(null)
     }
@@ -188,7 +282,7 @@ export default function AgentCockpit() {
     })
   }
 
-  if (!isConnected) {
+  if (!user.loggedIn) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="text-center space-y-6">
@@ -246,7 +340,7 @@ export default function AgentCockpit() {
         </header>
 
         <main className="container mx-auto px-6 py-8">
-          {isLoading ? (
+          {isLoadingAgents ? (
             <LoadingState />
           ) : agents.length === 0 ? (
             <EmptyState onBuildAgent={handleBuildAgent} />

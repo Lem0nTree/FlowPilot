@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Loader2 } from "lucide-react"
+import { backendAPI } from "@/lib/api/client"
+import { useFlow } from "@/lib/flow/FlowProvider"
+import { useToast } from "@/hooks/use-toast"
 
 type OnboardingWelcomeProps = {
   open: boolean
@@ -18,33 +21,46 @@ export type DiscoveredAgent = {
 }
 
 export function OnboardingWelcome({ open, onComplete, onClose }: OnboardingWelcomeProps) {
+  const { user } = useFlow()
+  const { toast } = useToast()
   const [isScanning, setIsScanning] = useState(true)
 
   useEffect(() => {
-    if (open && isScanning) {
-      // Simulate scanning for 3 seconds
-      const timer = setTimeout(() => {
-        setIsScanning(false)
-        const discovered: DiscoveredAgent[] = [
-          {
-            id: "1",
-            storagePath: "/storage/flowStaker_166558",
-            nickname: "",
-            description: "",
-          },
-          {
-            id: "2",
-            storagePath: "/storage/dcaBot_892341",
-            nickname: "",
-            description: "",
-          },
-        ]
-        onComplete(discovered)
-      }, 3000)
-
-      return () => clearTimeout(timer)
+    if (open && user.addr) {
+      performScan()
     }
-  }, [open, isScanning, onComplete])
+  }, [open, user.addr])
+
+  const performScan = async () => {
+    setIsScanning(true)
+    try {
+      // Call backend Smart Scan API
+      const result = await backendAPI.syncAgents(user.addr!)
+      
+      // Map backend agents to onboarding format
+      const discoveredAgents: DiscoveredAgent[] = result.data.agents.map(agent => ({
+        id: agent.id,
+        storagePath: agent.scheduledTxId,
+        nickname: agent.nickname || "",
+        description: agent.description || "",
+      }))
+
+      // Keep 3s animation for UX
+      setTimeout(() => {
+        onComplete(discoveredAgents)
+      }, 3000)
+    } catch (error) {
+      console.error("Scan failed:", error)
+      toast({
+        title: "Scan Failed",
+        description: "Could not scan for agents",
+        variant: "destructive",
+      })
+      onClose()
+    } finally {
+      setIsScanning(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>

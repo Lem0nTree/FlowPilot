@@ -458,4 +458,125 @@ router.get('/stats/:userId', async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/agents/agent/{agentId}/executions:
+ *   get:
+ *     summary: Get execution history for an agent
+ *     description: Retrieves paginated execution history for a specific agent
+ *     tags: [Agents]
+ *     parameters:
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *         description: Agent ID
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         example: 20
+ *         description: Number of executions to return
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         example: 0
+ *         description: Offset for pagination
+ *     responses:
+ *       200:
+ *         description: Execution history retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Success'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         executions:
+ *                           type: array
+ *                           items:
+ *                             type: object
+ *                         total:
+ *                           type: integer
+ *                         limit:
+ *                           type: integer
+ *                         offset:
+ *                           type: integer
+ *       404:
+ *         description: Agent not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get('/agent/:agentId/executions', async (req, res, next) => {
+  const { agentId } = req.params;
+  const limit = parseInt(req.query.limit) || 20;
+  const offset = parseInt(req.query.offset) || 0;
+  
+  try {
+    // Check if agent exists
+    const agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { 
+        id: true, 
+        executionHistory: true,
+        totalRuns: true,
+        successfulRuns: true,
+        failedRuns: true
+      }
+    });
+
+    if (!agent) {
+      return res.status(404).json({
+        success: false,
+        error: 'Agent not found',
+        message: 'No agent found with this ID'
+      });
+    }
+
+    // Get execution history (stored as JSON array in agent)
+    const executionHistory = agent.executionHistory || [];
+    
+    // Apply pagination
+    const paginatedExecutions = executionHistory.slice(offset, offset + limit);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        executions: paginatedExecutions,
+        total: executionHistory.length,
+        limit: limit,
+        offset: offset,
+        summary: {
+          totalRuns: agent.totalRuns || 0,
+          successfulRuns: agent.successfulRuns || 0,
+          failedRuns: agent.failedRuns || 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting execution history:', error.message);
+    next(error);
+  }
+});
+
 module.exports = router;

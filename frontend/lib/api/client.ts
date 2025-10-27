@@ -5,12 +5,19 @@ export interface Agent {
   scheduledTxId: string
   ownerAddress: string
   handlerContract: string
+  handlerUuid?: string
   status: string
   scheduledAt: string
   nickname?: string
   description?: string
   tags?: string[]
   isActive: boolean
+  totalRuns?: number
+  successfulRuns?: number
+  failedRuns?: number
+  lastExecutionAt?: string
+  executionHistory?: any[]
+  fees?: string
 }
 
 export interface SyncResponse {

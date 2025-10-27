@@ -2,15 +2,17 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { TransactionButton, TransactionLink } from "@onflow/react-sdk"
-import { ChevronDown, ChevronUp, Play, Pause, MoreVertical, Trash2, Edit, ExternalLink } from "lucide-react"
+import { TransactionButton } from "@onflow/react-sdk"
+import { ChevronDown, ChevronUp, Play, Pause, MoreVertical, Trash2, Edit, ExternalLink, Clock } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 
 type Agent = {
   id: string
   name: string
-  status: "active" | "paused" | "scheduled"
+  status: "active" | "paused" | "scheduled" | "stopped" | "error"
   workflowSummary: string
   schedule: string
   nextRun: string
@@ -20,6 +22,16 @@ type Agent = {
   successRate: number
   gasUsed: string
   scheduledTxId?: string
+  handlerContract?: string
+  executionHistory?: Array<{
+    scheduledTxId: string
+    completedTxId: string
+    status: string
+    scheduledAt: string
+    completedAt: string
+    fees: string
+    error?: string
+  }>
 }
 
 type AgentRowProps = {
@@ -30,6 +42,40 @@ type AgentRowProps = {
 
 export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showLogs, setShowLogs] = useState(false)
+  
+  // Get status color and label
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case "scheduled":
+      case "active":
+        return { color: "bg-green-500", label: "Active", animate: true }
+      case "paused":
+        return { color: "bg-blue-500", label: "Paused", animate: false }
+      case "stopped":
+      case "cancelled":
+      case "canceled":
+        return { color: "bg-yellow-500", label: "Stopped", animate: false }
+      case "failed":
+      case "error":
+        return { color: "bg-red-500", label: "Error", animate: false }
+      default:
+        return { color: "bg-muted-foreground", label: status, animate: false }
+    }
+  }
+  
+  const statusConfig = getStatusConfig(agent.status)
+  
+  // Build contract explorer URL
+  const getContractExplorerUrl = () => {
+    if (!agent.handlerContract) return null
+    return `https://testnet.flowscan.io/contract/${agent.handlerContract}?tab=deployments`
+  }
+  
+  // Build transaction explorer URL
+  const getTransactionExplorerUrl = (txId: string) => {
+    return `https://testnet.flowscan.io/transaction/${txId}`
+  }
 
   return (
     <div className="hover:bg-muted/30 transition-colors">
@@ -48,12 +94,11 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
           <div
             className={cn(
               "h-2 w-2 rounded-full",
-              agent.status === "active" ? "bg-primary animate-pulse" : 
-              agent.status === "scheduled" ? "bg-blue-500 animate-pulse" : 
-              "bg-muted-foreground",
+              statusConfig.color,
+              statusConfig.animate && "animate-pulse"
             )}
           />
-          <span className="text-sm capitalize text-foreground">{agent.status}</span>
+          <span className="text-sm text-foreground">{statusConfig.label}</span>
         </div>
 
         {/* Workflow */}
@@ -155,37 +200,139 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
             </div>
             <div className="space-y-1">
               <p className="text-xs text-muted-foreground">Workflow Details</p>
-              <p className="text-sm font-medium text-foreground">{agent.workflowSummary}</p>
+              {getContractExplorerUrl() ? (
+                <a 
+                  href={getContractExplorerUrl()!} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-primary hover:text-primary/80 inline-flex items-center gap-1"
+                >
+                  {agent.workflowSummary}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : (
+                <p className="text-sm font-medium text-foreground">{agent.workflowSummary}</p>
+              )}
             </div>
             {agent.scheduledTxId && (
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Last Transaction</p>
-                <TransactionLink 
-                  txId={agent.scheduledTxId}
-                  variant="link"
-                  className="text-xs text-primary hover:text-primary/80"
+                <a 
+                  href={getTransactionExplorerUrl(agent.scheduledTxId)} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-foreground hover:text-muted-foreground inline-flex items-center gap-1"
                 >
-                  <ExternalLink className="mr-1 h-3 w-3 inline" />
-                  View on Explorer
-                </TransactionLink>
+                  View on Block Explorer
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
             )}
           </div>
 
           {/* Action Buttons in Expanded View */}
           <div className="flex gap-2 mt-4 ml-9">
-            <Button size="sm" variant="outline">
+            <Button size="sm" variant="outline" onClick={() => setShowLogs(true)}>
+              <Clock className="mr-2 h-4 w-4" />
               View Logs
             </Button>
             <Button size="sm" variant="outline">
+              <Edit className="mr-2 h-4 w-4" />
               Edit Workflow
             </Button>
             <Button size="sm" variant="outline">
+              <Play className="mr-2 h-4 w-4" />
               Run Now
             </Button>
           </div>
         </div>
       )}
+      
+      {/* Execution Logs Dialog */}
+      <Dialog open={showLogs} onOpenChange={setShowLogs}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Execution History - {agent.name}</DialogTitle>
+            <DialogDescription>
+              View detailed execution logs and transaction history for this agent
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="h-[500px] pr-4">
+            {agent.executionHistory && agent.executionHistory.length > 0 ? (
+              <div className="space-y-3">
+                {agent.executionHistory.map((execution, index) => (
+                  <div 
+                    key={execution.scheduledTxId} 
+                    className="border border-border rounded-lg p-4 bg-card"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Run #{agent.totalRuns - index}</span>
+                        <span 
+                          className={cn(
+                            "text-xs px-2 py-0.5 rounded-full font-medium",
+                            execution.status === "executed" ? "bg-green-500/10 text-green-500" :
+                            execution.status === "failed" ? "bg-red-500/10 text-red-500" :
+                            "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          {execution.status}
+                        </span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(execution.completedAt).toLocaleString()}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3 text-sm mt-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Scheduled At</p>
+                        <p className="font-mono text-xs">{new Date(execution.scheduledAt).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Completed At</p>
+                        <p className="font-mono text-xs">{new Date(execution.completedAt).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Transaction ID</p>
+                        <a 
+                          href={getTransactionExplorerUrl(execution.completedTxId)} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-foreground hover:text-muted-foreground inline-flex items-center gap-1 font-mono"
+                        >
+                          {execution.completedTxId.slice(0, 8)}...
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Gas Fee</p>
+                        <p className="font-mono text-xs">{execution.fees} FLOW</p>
+                      </div>
+                    </div>
+                    
+                    {execution.error && (
+                      <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs">
+                        <p className="font-medium text-red-500 mb-1">Error:</p>
+                        <p className="text-red-400 font-mono whitespace-pre-wrap">{execution.error}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[300px] text-center">
+                <Clock className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-sm text-muted-foreground">No execution history available</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Execution logs will appear here once the agent runs
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -5,7 +5,6 @@ import { useFlowCurrentUser, useDarkMode, Connect, TransactionDialog } from "@on
 import { useTheme } from "@/contexts/theme-context"
 import { backendAPI, type Agent as BackendAgent } from "@/lib/api/client"
 import { useAgentActions } from "@/lib/flow/agent-hooks"
-import { useAgentScheduledTransactions } from "@/lib/flow/scheduled-transactions"
 import { handleFCLError } from "@/lib/flow/error-handler"
 import { AgentRow } from "@/components/agent-row"
 import { EmptyState } from "@/components/empty-state"
@@ -24,7 +23,7 @@ import { Wallet, Plus, Sun, Moon, RefreshCw, Loader2 } from "lucide-react"
 type Agent = {
   id: string
   name: string
-  status: "active" | "paused" | "scheduled"
+  status: "active" | "paused" | "scheduled" | "stopped" | "error"
   workflowSummary: string
   schedule: string
   nextRun: string
@@ -34,6 +33,8 @@ type Agent = {
   successRate: number
   gasUsed: string
   scheduledTxId?: string
+  handlerContract?: string
+  executionHistory?: any[]
 }
 
 // Cache key constants
@@ -110,14 +111,6 @@ export function AgentCockpitWrapper() {
     resumeError,
     deleteError,
   } = useAgentActions()
-
-  // Get scheduled transactions for the current user
-  const { 
-    agents: scheduledAgents = [], 
-    isLoading: isLoadingScheduled, 
-    error: scheduledError,
-    refetch: refetchScheduled
-  } = useAgentScheduledTransactions(user?.addr)
   
   // Initialize agents from cache
   const cachedAgents = useMemo(() => getCachedAgents(), [])
@@ -140,64 +133,82 @@ export function AgentCockpitWrapper() {
   // Load agents on mount if user is logged in
   useEffect(() => {
     if (user?.loggedIn && user?.addr) {
-      // Only fetch if cache is empty or stale (older than 5 minutes)
-      const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY)
-      const isStale = !cacheTimestamp || 
-        (Date.now() - parseInt(cacheTimestamp)) > 5 * 60 * 1000
-      
-      if (cachedAgents.length === 0 || isStale) {
-        loadAgents(false)
-      }
+      // Always load agents on mount - backend handles caching
+      loadAgents(false)
     }
-  }, [user?.loggedIn, user?.addr, cachedAgents.length])
+  }, [user?.loggedIn, user?.addr])
 
   const loadAgents = async (forceRefresh = false) => {
     if (!user?.addr) return
     
     setIsLoadingAgents(true)
     try {
-      // Use scheduled transactions from SDK hooks
-      if (scheduledAgents && scheduledAgents.length > 0) {
-        setAgents(scheduledAgents)
-        setCachedAgents(scheduledAgents)
+      // Fetch agents from backend (single source of truth)
+      const syncResult = await backendAPI.syncAgents(user?.addr, forceRefresh)
+      
+      // Map backend agents to frontend format
+      const mappedAgents: Agent[] = syncResult.data.agents.map(agent => {
+        const lastRun = agent.lastExecutionAt 
+          ? new Date(agent.lastExecutionAt).toLocaleString()
+          : "Never"
         
-        toast({
-          title: "Agents Loaded",
-          description: `Found ${scheduledAgents.length} scheduled agents`,
-        })
-      } else {
-        // Fallback to backend sync if no scheduled transactions found
-        const syncResult = await backendAPI.syncAgents(user?.addr, forceRefresh)
+        const totalRuns = agent.totalRuns ?? 0
+        const successfulRuns = agent.successfulRuns ?? 0
+        const successRate = totalRuns > 0 
+          ? Math.round((successfulRuns / totalRuns) * 100)
+          : 100
         
-        // Map backend agents to frontend format
-        const mappedAgents: Agent[] = syncResult.data.agents.map(agent => ({
+        // Extract contract name from handler contract (e.g., "A.address.ContractName" -> "ContractName")
+        const extractContractName = (handlerContract: string) => {
+          if (!handlerContract) return "Automated agent"
+          const parts = handlerContract.split('.')
+          return parts.length >= 3 ? parts[parts.length - 1] : handlerContract
+        }
+        
+        // Format handler contract name for display
+        const workflowSummary = agent.description || extractContractName(agent.handlerContract) || "Automated agent"
+        
+        // Map backend status to frontend status
+        const mapStatus = (backendStatus: string, isActive: boolean): "active" | "paused" | "scheduled" | "stopped" | "error" => {
+          if (backendStatus === "failed") return "error"
+          if (backendStatus === "cancelled" || backendStatus === "canceled") return "stopped"
+          if (backendStatus === "scheduled" && isActive) return "active"
+          if (!isActive) return "paused"
+          return "scheduled"
+        }
+        
+        return {
           id: agent.id,
-          name: agent.nickname || `Agent ${agent.id.slice(0, 8)}`,
-          status: agent.status as "active" | "paused" | "scheduled",
-          workflowSummary: agent.description || "Automated agent",
+          name: agent.nickname || `Agent ${agent.scheduledTxId.slice(0, 8)}`,
+          status: mapStatus(agent.status, agent.isActive),
+          workflowSummary: workflowSummary,
           schedule: "Scheduled",
           nextRun: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleString() : "Unknown",
           createdAt: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleDateString() : "Unknown",
-          lastRun: "Unknown",
-          totalRuns: 0,
-          successRate: 100,
-          gasUsed: "0.001 FLOW",
+          lastRun: lastRun,
+          totalRuns: totalRuns,
+          successRate: successRate,
+          gasUsed: agent.fees || "0.001 FLOW",
           scheduledTxId: agent.scheduledTxId,
-        }))
-        
-        setAgents(mappedAgents)
-        setCachedAgents(mappedAgents)
-        
+          handlerContract: agent.handlerContract,
+          executionHistory: agent.executionHistory || []
+        }
+      })
+      
+      setAgents(mappedAgents)
+      setCachedAgents(mappedAgents)
+      
+      if (!forceRefresh) {
         toast({
           title: "Agents Loaded",
-          description: `Found ${mappedAgents.length} agents`,
+          description: `Found ${mappedAgents.length} agent${mappedAgents.length !== 1 ? 's' : ''}`,
         })
       }
     } catch (error) {
       console.error("Failed to load agents:", error)
       toast({
         title: "Error",
-        description: "Failed to load agents",
+        description: "Failed to load agents from backend",
         variant: "destructive",
       })
     } finally {

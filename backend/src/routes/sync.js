@@ -103,12 +103,18 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
                 id: agent.id,
                 scheduledTxId: agent.scheduledTxId,
                 handlerContract: agent.handlerContract,
+                handlerUuid: agent.handlerUuid,
                 status: agent.status,
                 scheduledAt: agent.scheduledAt,
                 nickname: agent.nickname,
                 description: agent.description,
                 tags: agent.tags,
-                isActive: agent.isActive
+                isActive: agent.isActive,
+                totalRuns: agent.totalRuns || 0,
+                successfulRuns: agent.successfulRuns || 0,
+                failedRuns: agent.failedRuns || 0,
+                lastExecutionAt: agent.lastExecutionAt,
+                executionHistory: agent.executionHistory
               })),
               scanSummary: {
                 totalFound: cachedAgents.length,
@@ -155,11 +161,17 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
           scheduledTxId: agentData.scheduledTxId,
           ownerAddress: agentData.ownerAddress,
           handlerContract: agentData.handlerContract,
+          handlerUuid: agentData.handlerUuid,
           status: agentData.status,
           scheduledAt: new Date(agentData.scheduledAt),
           priority: agentData.priority,
           executionEffort: agentData.executionEffort ? BigInt(agentData.executionEffort) : null,
           fees: agentData.fees,
+          totalRuns: agentData.totalRuns || 0,
+          successfulRuns: agentData.successfulRuns || 0,
+          failedRuns: agentData.failedRuns || 0,
+          lastExecutionAt: agentData.lastExecutionAt ? new Date(agentData.lastExecutionAt) : null,
+          executionHistory: agentData.executionHistory || [],
           userId: user.id
         });
       } else {
@@ -174,7 +186,26 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
               priority: agentData.priority,
               executionEffort: agentData.executionEffort ? BigInt(agentData.executionEffort) : null,
               fees: agentData.fees,
+              totalRuns: agentData.totalRuns || 0,
+              successfulRuns: agentData.successfulRuns || 0,
+              failedRuns: agentData.failedRuns || 0,
+              lastExecutionAt: agentData.lastExecutionAt ? new Date(agentData.lastExecutionAt) : null,
+              executionHistory: agentData.executionHistory || [],
               isActive: true,
+              updatedAt: new Date()
+            }
+          });
+        } else {
+          // Agent is active - update execution data
+          agentsToUpdate.push({
+            id: dbAgent.id,
+            data: {
+              status: agentData.status,
+              totalRuns: agentData.totalRuns || 0,
+              successfulRuns: agentData.successfulRuns || 0,
+              failedRuns: agentData.failedRuns || 0,
+              lastExecutionAt: agentData.lastExecutionAt ? new Date(agentData.lastExecutionAt) : null,
+              executionHistory: agentData.executionHistory || [],
               updatedAt: new Date()
             }
           });
@@ -262,12 +293,18 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
           id: agent.id,
           scheduledTxId: agent.scheduledTxId,
           handlerContract: agent.handlerContract,
+          handlerUuid: agent.handlerUuid,
           status: agent.status,
           scheduledAt: agent.scheduledAt,
           nickname: agent.nickname,
           description: agent.description,
           tags: agent.tags,
-          isActive: agent.isActive
+          isActive: agent.isActive,
+          totalRuns: agent.totalRuns || 0,
+          successfulRuns: agent.successfulRuns || 0,
+          failedRuns: agent.failedRuns || 0,
+          lastExecutionAt: agent.lastExecutionAt,
+          executionHistory: agent.executionHistory
         })),
         scanSummary: {
           totalFound: scanResult.totalFound,

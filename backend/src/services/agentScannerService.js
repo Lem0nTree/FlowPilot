@@ -35,40 +35,35 @@ class AgentScannerService {
   }
 
   /**
-   * Scan for active agents using Find Labs API
+   * Scan for ALL transactions (scheduled + completed) using Find Labs API
    * @param {string} userAddress - Flow address to scan
-   * @returns {Promise<Object>} - Scan results
+   * @returns {Promise<Object>} - Scan results with execution chains
    */
   async scanForAgents(userAddress) {
     try {
-      console.log(`🔍 Scanning for agents for address: ${userAddress}`);
+      console.log(`🔍 Scanning for all transactions for address: ${userAddress}`);
       
-      const activeAgents = [];
+      const allTransactions = [];
       let offset = 0;
       const limit = 100;
       let hasMore = true;
 
+      // Fetch ALL transactions (no status filter)
       while (hasMore) {
         const response = await this.apiClient.get('/flow/v1/scheduled-transaction', {
           params: {
             owner: userAddress,
-            is_completed: false,
+            // Removed is_completed filter to get ALL transactions
             limit: limit,
             offset: offset
           }
         });
 
-        const agents = response.data.data || [];
-        
-        // Filter for scheduled status
-        const scheduledAgents = agents.filter(agent => 
-          agent.status === 'scheduled' || agent.status === 'pending'
-        );
-
-        activeAgents.push(...scheduledAgents);
+        const transactions = response.data.data || [];
+        allTransactions.push(...transactions);
 
         // Check if there are more results
-        hasMore = agents.length === limit;
+        hasMore = transactions.length === limit;
         offset += limit;
 
         // Safety break to prevent infinite loops
@@ -78,11 +73,17 @@ class AgentScannerService {
         }
       }
 
-      console.log(`✅ Found ${activeAgents.length} active agents for ${userAddress}`);
+      console.log(`✅ Found ${allTransactions.length} total transactions for ${userAddress}`);
+
+      // Build execution chains
+      const { activeAgents, executionData } = this.buildExecutionChains(allTransactions);
+
+      console.log(`✅ Identified ${activeAgents.length} active agents with execution history`);
 
       return {
         success: true,
-        activeAgents: activeAgents.map(agent => this.mapAgentData(agent)),
+        activeAgents: activeAgents,
+        allTransactions: allTransactions.map(tx => this.mapAgentData(tx)),
         totalFound: activeAgents.length,
         scannedAt: new Date().toISOString()
       };
@@ -104,6 +105,100 @@ class AgentScannerService {
   }
 
   /**
+   * Build execution chains from all transactions
+   * Groups transactions by handler_uuid and traces execution history
+   * @param {Array} transactions - All transactions from API
+   * @returns {Object} - Active agents with execution chains
+   */
+  buildExecutionChains(transactions) {
+    // Group transactions by handler_uuid
+    const handlerGroups = {};
+    
+    transactions.forEach(tx => {
+      const uuid = tx.handler_uuid;
+      if (!uuid) return;
+      
+      if (!handlerGroups[uuid]) {
+        handlerGroups[uuid] = [];
+      }
+      handlerGroups[uuid].push(tx);
+    });
+
+    const activeAgents = [];
+
+    // Process each handler group
+    Object.entries(handlerGroups).forEach(([uuid, txList]) => {
+      // Find the current scheduled transaction (this is the "active" agent)
+      const scheduledTx = txList.find(tx => tx.status === 'scheduled');
+      
+      if (!scheduledTx) {
+        // No scheduled transaction means this agent is no longer active
+        return;
+      }
+
+      // Build execution chain by walking backwards through completed transactions
+      const executionChain = [];
+      const txMap = new Map(txList.map(tx => [tx.scheduled_transaction, tx]));
+      
+      let successCount = 0;
+      let failedCount = 0;
+      let lastExecutionDate = null;
+
+      // Walk the chain backwards from most recent completed transactions
+      txList.forEach(tx => {
+        if (tx.is_completed && tx.status !== 'scheduled') {
+          executionChain.push({
+            scheduledTxId: tx.id,
+            completedTxId: tx.completed_transaction,
+            status: tx.status,
+            scheduledAt: tx.scheduled_at,
+            completedAt: tx.completed_at,
+            blockHeight: tx.block_height,
+            completedBlockHeight: tx.completed_block_height,
+            fees: tx.fees,
+            executionEffort: tx.execution_effort,
+            error: tx.error
+          });
+
+          if (tx.status === 'executed') {
+            successCount++;
+          } else if (tx.status === 'failed') {
+            failedCount++;
+          }
+
+          // Track most recent execution
+          if (tx.completed_at) {
+            const completedDate = new Date(tx.completed_at);
+            if (!lastExecutionDate || completedDate > lastExecutionDate) {
+              lastExecutionDate = completedDate;
+            }
+          }
+        }
+      });
+
+      // Sort execution chain by completion time (most recent first)
+      executionChain.sort((a, b) => {
+        const dateA = new Date(a.completedAt || 0);
+        const dateB = new Date(b.completedAt || 0);
+        return dateB - dateA;
+      });
+
+      // Create the active agent with execution data
+      const agentData = this.mapAgentData(scheduledTx);
+      agentData.totalRuns = executionChain.length;
+      agentData.successfulRuns = successCount;
+      agentData.failedRuns = failedCount;
+      agentData.lastExecutionAt = lastExecutionDate;
+      agentData.executionHistory = executionChain;
+      agentData.handlerUuid = uuid;
+
+      activeAgents.push(agentData);
+    });
+
+    return { activeAgents };
+  }
+
+  /**
    * Map Find Labs API response to our internal format
    * @param {Object} agent - Agent data from API
    * @returns {Object} - Mapped agent data
@@ -113,13 +208,18 @@ class AgentScannerService {
       scheduledTxId: agent.id,
       ownerAddress: agent.owner,
       handlerContract: agent.handler_contract,
+      handlerUuid: agent.handler_uuid?.toString(),
       status: agent.status,
       scheduledAt: agent.scheduled_at,
       priority: agent.priority,
       executionEffort: agent.execution_effort,
       fees: agent.fees?.toString(),
       createdAt: agent.created_at,
-      updatedAt: agent.updated_at
+      updatedAt: agent.updated_at,
+      completedTransaction: agent.completed_transaction,
+      blockHeight: agent.block_height,
+      completedBlockHeight: agent.completed_block_height,
+      isCompleted: agent.is_completed
     };
   }
 

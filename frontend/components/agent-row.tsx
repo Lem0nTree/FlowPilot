@@ -205,7 +205,7 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
                   href={getContractExplorerUrl()!} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-sm font-medium text-primary hover:text-primary/80 inline-flex items-center gap-1"
+                  className="text-sm font-medium text-foreground hover:text-muted-foreground inline-flex items-center gap-1"
                 >
                   {agent.workflowSummary}
                   <ExternalLink className="h-3 w-3" />
@@ -250,7 +250,7 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
       
       {/* Execution Logs Dialog */}
       <Dialog open={showLogs} onOpenChange={setShowLogs}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
+        <DialogContent className="sm:max-w-xl max-w-[95vw] max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Execution History - {agent.name}</DialogTitle>
             <DialogDescription>
@@ -285,7 +285,7 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
                       </span>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3 text-sm mt-3">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm mt-3">
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Scheduled At</p>
                         <p className="font-mono text-xs">{new Date(execution.scheduledAt).toLocaleString()}</p>

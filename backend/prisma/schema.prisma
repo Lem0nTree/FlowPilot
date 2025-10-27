@@ -29,6 +29,7 @@ model Agent {
   scheduledTxId  String   @unique // From Find Labs API
   ownerAddress    String   // User's Flow address
   handlerContract String   // e.g., "A.12345.DCABot"
+  handlerUuid     String?  // Handler UUID to group executions of same agent
   status          String   // "scheduled", "executed", "cancelled"
   scheduledAt     DateTime
   priority        String?
@@ -41,6 +42,14 @@ model Agent {
   tags            String[] // Array of tags for categorization
   isActive        Boolean  @default(true)
   
+  // Execution tracking
+  totalRuns       Int      @default(0)
+  successfulRuns  Int      @default(0)
+  failedRuns      Int      @default(0)
+  lastExecutionAt DateTime?
+  completedTransactionId String? // Link to the completed transaction
+  executionHistory Json?   // Array of execution details
+  
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -49,13 +58,42 @@ model Agent {
   // Relations
   userId          String   @db.ObjectId
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  executions      AgentExecution[]
   
   // Indexes for better query performance
   @@index([ownerAddress])
   @@index([status])
   @@index([scheduledAt])
   @@index([userId])
+  @@index([handlerUuid])
   @@map("agents")
+}
+
+model AgentExecution {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  agentId               String   @db.ObjectId
+  scheduledTxId        String   // The scheduled transaction ID
+  completedTxId        String?  // The completed transaction ID
+  status                String   // "executed", "failed", "cancelled"
+  scheduledAt           DateTime
+  completedAt           DateTime?
+  blockHeight           BigInt?
+  completedBlockHeight  BigInt?
+  fees                  String?
+  executionEffort       BigInt?
+  errorMessage          String?
+  
+  // Timestamps
+  createdAt             DateTime @default(now())
+  
+  // Relations
+  agent                 Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  // Indexes
+  @@index([agentId])
+  @@index([scheduledTxId])
+  @@index([completedAt])
+  @@map("agent_executions")
 }
 
 model ScanHistory {

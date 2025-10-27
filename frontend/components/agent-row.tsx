@@ -76,6 +76,44 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
   const getTransactionExplorerUrl = (txId: string) => {
     return `https://testnet.flowscan.io/transaction/${txId}`
   }
+  
+  // Calculate schedule interval from execution history
+  const calculateScheduleInterval = (): string => {
+    if (!agent.executionHistory || agent.executionHistory.length < 2) {
+      return agent.schedule || "Unknown"
+    }
+    
+    // Get the two most recent executions to calculate interval
+    const executions = agent.executionHistory
+      .filter(ex => ex.completedAt)
+      .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+    
+    if (executions.length < 2) {
+      return agent.schedule || "Unknown"
+    }
+    
+    // Calculate difference in seconds between most recent two executions
+    const time1 = new Date(executions[0].completedAt).getTime()
+    const time2 = new Date(executions[1].completedAt).getTime()
+    const diffSeconds = Math.abs(time1 - time2) / 1000
+    
+    // Format based on the best unit
+    if (diffSeconds < 60) {
+      return `Every ${Math.round(diffSeconds)} seconds`
+    } else if (diffSeconds < 3600) {
+      const minutes = Math.round(diffSeconds / 60)
+      return `Every ${minutes} minute${minutes !== 1 ? 's' : ''}`
+    } else if (diffSeconds < 86400) {
+      const hours = Math.round(diffSeconds / 3600)
+      return `Every ${hours} hour${hours !== 1 ? 's' : ''}`
+    } else if (diffSeconds < 604800) {
+      const days = Math.round(diffSeconds / 86400)
+      return `Every ${days} day${days !== 1 ? 's' : ''}`
+    } else {
+      const weeks = Math.round(diffSeconds / 604800)
+      return `Every ${weeks} week${weeks !== 1 ? 's' : ''}`
+    }
+  }
 
   return (
     <div className="hover:bg-muted/30 transition-colors">
@@ -108,7 +146,7 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
 
         {/* Schedule */}
         <div className="col-span-2">
-          <span className="text-sm text-muted-foreground">{agent.schedule}</span>
+          <span className="text-sm text-muted-foreground">{calculateScheduleInterval()}</span>
         </div>
 
         {/* Next Run */}
@@ -117,41 +155,19 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
 
           {/* Actions */}
           <div className="flex items-center gap-1">
-            <TransactionButton
-              transaction={{
-                cadence: agent.status === "active" || agent.status === "scheduled" 
-                  ? `import FlowTransactionScheduler from 0xFlowTransactionScheduler
-                     transaction(scheduledTxId: String) {
-                       prepare(signer: auth(Storage) &Account) {
-                         let scheduler = FlowTransactionScheduler.getScheduler()
-                         scheduler.cancel(id: scheduledTxId)
-                       }
-                     }`
-                  : `import FlowTransactionScheduler from 0xFlowTransactionScheduler
-                     transaction(scheduledTxId: String) {
-                       prepare(signer: auth(Storage) &Account) {
-                         // Resume logic here
-                       }
-                     }`,
-                args: (arg, t) => [arg(agent.scheduledTxId || "", t.String)],
-                limit: 9999,
-              }}
-              label={agent.status === "active" || agent.status === "scheduled" ? "Pause" : "Resume"}
-              variant="ghost"
-              size="icon"
+            <Button 
+              variant="ghost" 
+              size="icon" 
               className="h-8 w-8"
+              onClick={() => onToggleStatus(agent.id)}
               title={
                 agent.status === "active" ? "Pause agent" : 
                 agent.status === "scheduled" ? "Pause agent" : 
                 "Resume agent"
               }
-              mutation={{
-                onSuccess: () => onToggleStatus(agent.id),
-                onError: (error) => console.error("Transaction failed:", error)
-              }}
             >
               {agent.status === "active" || agent.status === "scheduled" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </TransactionButton>
+            </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

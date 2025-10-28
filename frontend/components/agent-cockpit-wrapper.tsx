@@ -25,7 +25,7 @@ import { Wallet, Plus, Sun, Moon, RefreshCw, Loader2 } from "lucide-react"
 type Agent = {
   id: string
   name: string
-  status: "active" | "paused" | "scheduled" | "stopped" | "error"
+  status: "active" | "paused" | "scheduled" | "stopped" | "error" | "completed"
   workflowSummary: string
   schedule: string
   nextRun: string
@@ -122,6 +122,7 @@ export function AgentCockpitWrapper() {
   // Initialize agents from cache
   const cachedAgents = useMemo(() => getCachedAgents(), [])
   const [agents, setAgents] = useState<Agent[]>(cachedAgents)
+  const [completedAgents, setCompletedAgents] = useState<Agent[]>([])
   const [isLoadingAgents, setIsLoadingAgents] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -154,8 +155,8 @@ export function AgentCockpitWrapper() {
       // Fetch agents from backend (single source of truth)
       const syncResult = await backendAPI.syncAgents(user?.addr, forceRefresh)
       
-      // Map backend agents to frontend format
-      const mappedAgents: Agent[] = syncResult.data.agents.map(agent => {
+      // Helper function to map agent data
+      const mapAgentData = (agent: any): Agent => {
         const lastRun = agent.lastExecutionAt 
           ? new Date(agent.lastExecutionAt).toLocaleString()
           : "Never"
@@ -177,9 +178,10 @@ export function AgentCockpitWrapper() {
         const workflowSummary = agent.description || extractContractName(agent.handlerContract) || "Automated agent"
         
         // Map backend status to frontend status
-        const mapStatus = (backendStatus: string, isActive: boolean): "active" | "paused" | "scheduled" | "stopped" | "error" => {
+        const mapStatus = (backendStatus: string, isActive: boolean): "active" | "paused" | "scheduled" | "stopped" | "error" | "completed" => {
           if (backendStatus === "failed") return "error"
           if (backendStatus === "cancelled" || backendStatus === "canceled") return "stopped"
+          if (backendStatus === "completed" && !isActive) return "completed"
           if (backendStatus === "scheduled" && isActive) return "active"
           if (!isActive) return "paused"
           return "scheduled"
@@ -191,7 +193,7 @@ export function AgentCockpitWrapper() {
           status: mapStatus(agent.status, agent.isActive),
           workflowSummary: workflowSummary,
           schedule: "Scheduled",
-          nextRun: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleString() : "Unknown",
+          nextRun: agent.status === 'completed' ? 'Completed' : (agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleString() : "Unknown"),
           createdAt: agent.scheduledAt ? new Date(agent.scheduledAt).toLocaleDateString() : "Unknown",
           lastRun: lastRun,
           totalRuns: totalRuns,
@@ -201,15 +203,22 @@ export function AgentCockpitWrapper() {
           handlerContract: agent.handlerContract,
           executionHistory: agent.executionHistory || []
         }
-      })
+      }
       
-      setAgents(mappedAgents)
-      setCachedAgents(mappedAgents)
+      // Map active agents
+      const mappedActiveAgents: Agent[] = (syncResult.data.agents || []).map(mapAgentData)
+      
+      // Map completed agents
+      const mappedCompletedAgents: Agent[] = (syncResult.data.completedAgents || []).map(mapAgentData)
+      
+      setAgents(mappedActiveAgents)
+      setCompletedAgents(mappedCompletedAgents)
+      setCachedAgents(mappedActiveAgents)
       
       if (!forceRefresh) {
         toast({
           title: "Agents Loaded",
-          description: `Found ${mappedAgents.length} agent${mappedAgents.length !== 1 ? 's' : ''}`,
+          description: `Found ${mappedActiveAgents.length} active and ${mappedCompletedAgents.length} completed agent${mappedActiveAgents.length + mappedCompletedAgents.length !== 1 ? 's' : ''}`,
         })
       }
     } catch (error) {
@@ -560,9 +569,9 @@ export function AgentCockpitWrapper() {
         </header>
 
         <main className="container mx-auto px-6 py-8">
-          {isLoadingAgents && agents.length === 0 ? (
+          {isLoadingAgents && agents.length === 0 && completedAgents.length === 0 ? (
             <LoadingState />
-          ) : agents.length === 0 ? (
+          ) : agents.length === 0 && completedAgents.length === 0 ? (
             <EmptyState 
               onBuildAgent={handleBuildAgent}      // Primary button - will navigate to builder
               onImportAgent={handleManualImport}   // Secondary button - triggers import popup
@@ -577,39 +586,77 @@ export function AgentCockpitWrapper() {
                 </div>
               )}
               
-              <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* Table Header */}
-                <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-sm font-medium text-muted-foreground">
-                  <div className="col-span-3">Agent Name</div>
-                  <div className="col-span-2">Status</div>
-                  <div className="col-span-3">Workflow</div>
-                  <div className="col-span-2">Schedule</div>
-                  <div className="col-span-2">Next Run</div>
-                </div>
+              {/* Active Agents Table */}
+              {agents.length > 0 && (
+                <div className="bg-card border border-border rounded-lg overflow-hidden mb-6">
+                  {/* Table Header */}
+                  <div className="px-6 py-3 bg-muted/30 border-b border-border">
+                    <h2 className="text-lg font-semibold text-foreground">Active Agents</h2>
+                    <p className="text-sm text-muted-foreground mt-1">These agents are currently executing transactions</p>
 
-                {/* Agent Rows */}
-                <div className="divide-y divide-border">
-                  {agents.map((agent) => (
-                    <AgentRow
-                      key={agent.id}
-                      agent={agent}
-                      onToggleStatus={handleToggleStatus}
-                      onDelete={handleDeleteClick}
-                    />
-                  ))}
-                  
-                  {/* Manual Import Row */}
-                  <button
-                    onClick={handleManualImport}
-                    className="w-full px-6 py-4 flex items-center gap-3 text-left hover:bg-muted/50 transition-colors group"
-                  >
-                    <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                      Import an agent manually
-                    </span>
-                  </button>
+                  </div>
+                  <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-sm font-medium text-muted-foreground">
+                    <div className="col-span-3">Agent Name</div>
+                    <div className="col-span-2">Status</div>
+                    <div className="col-span-3">Workflow</div>
+                    <div className="col-span-2">Schedule</div>
+                    <div className="col-span-2">Next Run</div>
+                  </div>
+
+                  {/* Agent Rows */}
+                  <div className="divide-y divide-border">
+                    {agents.map((agent) => (
+                      <AgentRow
+                        key={agent.id}
+                        agent={agent}
+                        onToggleStatus={handleToggleStatus}
+                        onDelete={handleDeleteClick}
+                      />
+                    ))}
+                    
+                    {/* Manual Import Row */}
+                    <button
+                      onClick={handleManualImport}
+                      className="w-full px-6 py-4 flex items-center gap-3 text-left hover:bg-muted/50 transition-colors group"
+                    >
+                      <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                        Import an agent manually
+                      </span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
+              
+              {/* Completed Agents Table */}
+              {completedAgents.length > 0 && (
+                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                  {/* Table Header */}
+                  <div className="px-6 py-3 bg-muted/30 border-b border-border">
+                    <h2 className="text-lg font-semibold text-foreground">Completed Agents</h2>
+                    <p className="text-sm text-muted-foreground mt-1">These agents have finished all scheduled executions</p>
+                  </div>
+                  <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-muted/50 border-b border-border text-sm font-medium text-muted-foreground">
+                    <div className="col-span-3">Agent Name</div>
+                    <div className="col-span-2">Status</div>
+                    <div className="col-span-3">Workflow</div>
+                    <div className="col-span-2">Schedule</div>
+                    <div className="col-span-2">Next Run</div>
+                  </div>
+
+                  {/* Completed Agent Rows */}
+                  <div className="divide-y divide-border">
+                    {completedAgents.map((agent) => (
+                      <AgentRow
+                        key={agent.id}
+                        agent={agent}
+                        onToggleStatus={handleToggleStatus}
+                        onDelete={handleDeleteClick}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </main>

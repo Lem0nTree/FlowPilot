@@ -81,13 +81,44 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
         if (timeSinceLastScan < SYNC_INTERVAL_MINUTES) {
           console.log(`🔄 Sync skipped: Last scan was ${timeSinceLastScan.toFixed(1)} mins ago.`);
           
-          // Return cached data from our database
-          const cachedAgents = await prisma.agent.findMany({ 
-            where: { 
-              ownerAddress: address,
-              isActive: true 
-            },
-            orderBy: { createdAt: 'desc' }
+          // Return cached data from our database - separate active and completed
+          const [cachedActiveAgents, cachedCompletedAgents] = await Promise.all([
+            prisma.agent.findMany({ 
+              where: { 
+                ownerAddress: address,
+                isActive: true 
+              },
+              orderBy: { createdAt: 'desc' }
+            }),
+            prisma.agent.findMany({ 
+              where: { 
+                ownerAddress: address,
+                isActive: false,
+                status: 'completed'
+              },
+              orderBy: { updatedAt: 'desc' },
+              take: 50
+            })
+          ]);
+
+          const mapCachedAgent = (agent) => ({
+            id: agent.id,
+            scheduledTxId: agent.scheduledTxId,
+            handlerContract: agent.handlerContract,
+            handlerUuid: agent.handlerUuid,
+            chainId: agent.chainId,
+            status: agent.status,
+            scheduledAt: agent.scheduledAt,
+            nickname: agent.nickname,
+            description: agent.description,
+            tags: agent.tags,
+            isActive: agent.isActive,
+            totalRuns: agent.totalRuns || 0,
+            successfulRuns: agent.successfulRuns || 0,
+            failedRuns: agent.failedRuns || 0,
+            lastExecutionAt: agent.lastExecutionAt,
+            executionHistory: agent.executionHistory,
+            fees: agent.fees
           });
 
           return res.status(200).json({
@@ -99,26 +130,13 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
                 address: user.address,
                 nickname: user.nickname
               },
-              agents: cachedAgents.map(agent => ({
-                id: agent.id,
-                scheduledTxId: agent.scheduledTxId,
-                handlerContract: agent.handlerContract,
-                handlerUuid: agent.handlerUuid,
-                status: agent.status,
-                scheduledAt: agent.scheduledAt,
-                nickname: agent.nickname,
-                description: agent.description,
-                tags: agent.tags,
-                isActive: agent.isActive,
-                totalRuns: agent.totalRuns || 0,
-                successfulRuns: agent.successfulRuns || 0,
-                failedRuns: agent.failedRuns || 0,
-                lastExecutionAt: agent.lastExecutionAt,
-                executionHistory: agent.executionHistory
-              })),
+              agents: cachedActiveAgents.map(mapCachedAgent),
+              completedAgents: cachedCompletedAgents.map(mapCachedAgent),
               scanSummary: {
-                totalFound: cachedAgents.length,
-                processed: cachedAgents.length,
+                totalFound: cachedActiveAgents.length + cachedCompletedAgents.length,
+                activeCount: cachedActiveAgents.length,
+                completedCount: cachedCompletedAgents.length,
+                processed: cachedActiveAgents.length + cachedCompletedAgents.length,
                 scannedAt: lastScan.createdAt,
                 cached: true
               }
@@ -137,15 +155,18 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
       throw new Error('Scan service failed to retrieve agents.');
     }
 
-    // Create API agent map for efficient lookup
-    const apiAgentMap = new Map(
+    // Create API agent maps for efficient lookup (both active and completed)
+    const apiActiveAgentMap = new Map(
       scanResult.activeAgents.map(agent => [agent.scheduledTxId, agent])
+    );
+    const apiCompletedAgentMap = new Map(
+      scanResult.completedAgents.map(agent => [agent.scheduledTxId, agent])
     );
 
     // Fetch Current State from our database
     const dbAgents = await prisma.agent.findMany({
       where: { ownerAddress: address },
-      select: { id: true, scheduledTxId: true, isActive: true },
+      select: { id: true, scheduledTxId: true, isActive: true, status: true },
     });
     const dbAgentMap = new Map(dbAgents.map(agent => [agent.scheduledTxId, agent]));
 
@@ -154,14 +175,15 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
     const agentsToDeactivate = [];
     const agentsToUpdate = [];
 
-    // Find agents to create (in API but not in DB)
-    for (const [txId, agentData] of apiAgentMap.entries()) {
+    // Process active agents from API
+    for (const [txId, agentData] of apiActiveAgentMap.entries()) {
       if (!dbAgentMap.has(txId)) {
         agentsToCreate.push({
           scheduledTxId: agentData.scheduledTxId,
           ownerAddress: agentData.ownerAddress,
           handlerContract: agentData.handlerContract,
           handlerUuid: agentData.handlerUuid,
+          chainId: agentData.chainId,
           status: agentData.status,
           scheduledAt: new Date(agentData.scheduledAt),
           priority: agentData.priority,
@@ -172,40 +194,66 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
           failedRuns: agentData.failedRuns || 0,
           lastExecutionAt: agentData.lastExecutionAt ? new Date(agentData.lastExecutionAt) : null,
           executionHistory: agentData.executionHistory || [],
+          isActive: true,
           userId: user.id
         });
       } else {
-        // Agent exists - check if it needs updating
+        // Agent exists - update it
         const dbAgent = dbAgentMap.get(txId);
-        if (!dbAgent.isActive) {
+        agentsToUpdate.push({
+          id: dbAgent.id,
+          data: {
+            status: agentData.status,
+            chainId: agentData.chainId,
+            totalRuns: agentData.totalRuns || 0,
+            successfulRuns: agentData.successfulRuns || 0,
+            failedRuns: agentData.failedRuns || 0,
+            lastExecutionAt: agentData.lastExecutionAt ? new Date(agentData.lastExecutionAt) : null,
+            executionHistory: agentData.executionHistory || [],
+            isActive: true,
+            updatedAt: new Date()
+          }
+        });
+      }
+    }
+
+    // Process completed agents from API
+    for (const [txId, agentData] of apiCompletedAgentMap.entries()) {
+      if (!dbAgentMap.has(txId)) {
+        agentsToCreate.push({
+          scheduledTxId: agentData.scheduledTxId,
+          ownerAddress: agentData.ownerAddress,
+          handlerContract: agentData.handlerContract,
+          handlerUuid: agentData.handlerUuid,
+          chainId: agentData.chainId,
+          status: 'completed',
+          scheduledAt: new Date(agentData.scheduledAt),
+          priority: agentData.priority,
+          executionEffort: agentData.executionEffort ? BigInt(agentData.executionEffort) : null,
+          fees: agentData.fees,
+          totalRuns: agentData.totalRuns || 0,
+          successfulRuns: agentData.successfulRuns || 0,
+          failedRuns: agentData.failedRuns || 0,
+          lastExecutionAt: agentData.lastExecutionAt ? new Date(agentData.lastExecutionAt) : null,
+          executionHistory: agentData.executionHistory || [],
+          isActive: false,
+          userId: user.id
+        });
+      } else {
+        // Agent exists - mark as completed
+        const dbAgent = dbAgentMap.get(txId);
+        if (dbAgent.status !== 'completed') {
           agentsToUpdate.push({
             id: dbAgent.id,
             data: {
-              status: agentData.status,
-              scheduledAt: new Date(agentData.scheduledAt),
-              priority: agentData.priority,
-              executionEffort: agentData.executionEffort ? BigInt(agentData.executionEffort) : null,
-              fees: agentData.fees,
+              status: 'completed',
+              chainId: agentData.chainId,
               totalRuns: agentData.totalRuns || 0,
               successfulRuns: agentData.successfulRuns || 0,
               failedRuns: agentData.failedRuns || 0,
               lastExecutionAt: agentData.lastExecutionAt ? new Date(agentData.lastExecutionAt) : null,
               executionHistory: agentData.executionHistory || [],
-              isActive: true,
-              updatedAt: new Date()
-            }
-          });
-        } else {
-          // Agent is active - update execution data
-          agentsToUpdate.push({
-            id: dbAgent.id,
-            data: {
-              status: agentData.status,
-              totalRuns: agentData.totalRuns || 0,
-              successfulRuns: agentData.successfulRuns || 0,
-              failedRuns: agentData.failedRuns || 0,
-              lastExecutionAt: agentData.lastExecutionAt ? new Date(agentData.lastExecutionAt) : null,
-              executionHistory: agentData.executionHistory || [],
+              isActive: false,
               updatedAt: new Date()
             }
           });
@@ -213,9 +261,9 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
       }
     }
 
-    // Find agents to deactivate (in DB but not in API)
+    // Find agents to deactivate (in DB but not in API - neither active nor completed)
     for (const [txId, dbAgent] of dbAgentMap.entries()) {
-      if (!apiAgentMap.has(txId) && dbAgent.isActive) {
+      if (!apiActiveAgentMap.has(txId) && !apiCompletedAgentMap.has(txId) && dbAgent.isActive) {
         agentsToDeactivate.push(txId);
       }
     }
@@ -297,16 +345,47 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
       },
     });
 
-    // 7. Fetch final state for response
-    const finalAgents = await prisma.agent.findMany({
-      where: { 
-        ownerAddress: address,
-        isActive: true 
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    // 7. Fetch final state for response - separate active and completed
+    const [activeAgents, completedAgents] = await Promise.all([
+      prisma.agent.findMany({
+        where: { 
+          ownerAddress: address,
+          isActive: true
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.agent.findMany({
+        where: { 
+          ownerAddress: address,
+          isActive: false,
+          status: 'completed'
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 50 // Limit completed agents shown
+      })
+    ]);
 
     console.log(`✅ State reconciliation complete: Created ${results.created}, Updated ${results.updated}, Deactivated ${results.deactivated}`);
+
+    const mapAgentData = (agent) => ({
+      id: agent.id,
+      scheduledTxId: agent.scheduledTxId,
+      handlerContract: agent.handlerContract,
+      handlerUuid: agent.handlerUuid,
+      chainId: agent.chainId,
+      status: agent.status,
+      scheduledAt: agent.scheduledAt,
+      nickname: agent.nickname,
+      description: agent.description,
+      tags: agent.tags,
+      isActive: agent.isActive,
+      totalRuns: agent.totalRuns || 0,
+      successfulRuns: agent.successfulRuns || 0,
+      failedRuns: agent.failedRuns || 0,
+      lastExecutionAt: agent.lastExecutionAt,
+      executionHistory: agent.executionHistory,
+      fees: agent.fees
+    });
 
     res.status(200).json({
       success: true,
@@ -317,26 +396,13 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
           address: user.address,
           nickname: user.nickname
         },
-        agents: finalAgents.map(agent => ({
-          id: agent.id,
-          scheduledTxId: agent.scheduledTxId,
-          handlerContract: agent.handlerContract,
-          handlerUuid: agent.handlerUuid,
-          status: agent.status,
-          scheduledAt: agent.scheduledAt,
-          nickname: agent.nickname,
-          description: agent.description,
-          tags: agent.tags,
-          isActive: agent.isActive,
-          totalRuns: agent.totalRuns || 0,
-          successfulRuns: agent.successfulRuns || 0,
-          failedRuns: agent.failedRuns || 0,
-          lastExecutionAt: agent.lastExecutionAt,
-          executionHistory: agent.executionHistory
-        })),
+        agents: activeAgents.map(mapAgentData),
+        completedAgents: completedAgents.map(mapAgentData),
         scanSummary: {
           totalFound: scanResult.totalFound,
-          processed: finalAgents.length,
+          activeCount: activeAgents.length,
+          completedCount: completedAgents.length,
+          processed: activeAgents.length + completedAgents.length,
           scannedAt: scanResult.scannedAt,
           reconciliation: {
             created: results.created,

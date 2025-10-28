@@ -30,6 +30,7 @@ model Agent {
   ownerAddress    String   // User's Flow address
   handlerContract String   // e.g., "A.12345.DCABot"
   handlerUuid     String?  // Handler UUID to group executions of same agent
+  chainId         String?  // First scheduled_tx in chain, used for grouping
   status          String   // "scheduled", "executed", "cancelled"
   scheduledAt     DateTime
   priority        String?

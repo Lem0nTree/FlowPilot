@@ -8,8 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
-import { ArrowLeft, CalendarIcon, Clock } from "lucide-react"
+import { ArrowLeft, CalendarIcon, Clock, AlertCircle, CheckCircle } from "lucide-react"
 import { format } from "date-fns"
+import { usePaymentHandlerStatus } from "@/lib/flow/payment-agent-hooks"
+import { useFlowCurrentUser } from "@onflow/react-sdk"
 
 interface TemplateConfigPanelProps {
   open: boolean
@@ -19,6 +21,9 @@ interface TemplateConfigPanelProps {
 }
 
 export function TemplateConfigPanel({ open, templateId, onBack, onCreate }: TemplateConfigPanelProps) {
+  const { user } = useFlowCurrentUser()
+  const { data: isHandlerInitialized, isLoading: checkingHandler } = usePaymentHandlerStatus(user?.addr)
+  
   const [destinationAddress, setDestinationAddress] = useState("")
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState<Date>()
@@ -113,6 +118,23 @@ export function TemplateConfigPanel({ open, templateId, onBack, onCreate }: Temp
 
         {/* Form */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Handler Status Indicator */}
+          {checkingHandler ? (
+            <div className="p-3 bg-muted/50 border border-border rounded-lg flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Checking handler status...</span>
+            </div>
+          ) : isHandlerInitialized ? (
+            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-green-500">Payment handler ready</span>
+            </div>
+          ) : (
+            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-yellow-500" />
+              <span className="text-sm text-yellow-500">Handler will be initialized automatically</span>
+            </div>
+          )}
+
           {/* Destination Address */}
           <div className="space-y-2">
             <Label htmlFor="destination">Destination Address</Label>

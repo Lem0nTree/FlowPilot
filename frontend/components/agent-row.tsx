@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 type Agent = {
   id: string
   name: string
-  status: "active" | "paused" | "scheduled" | "stopped" | "error"
+  status: "active" | "paused" | "scheduled" | "stopped" | "error" | "completed"
   workflowSummary: string
   schedule: string
   nextRun: string
@@ -51,11 +51,13 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
       case "active":
         return { color: "bg-green-500", label: "Active", animate: true }
       case "paused":
-        return { color: "bg-blue-500", label: "Paused", animate: false }
+        return { color: "bg-yellow-500", label: "Paused", animate: false }
+      case "completed":
+        return { color: "bg-blue-500", label: "Completed", animate: false }
       case "stopped":
       case "cancelled":
       case "canceled":
-        return { color: "bg-yellow-500", label: "Stopped", animate: false }
+        return { color: "bg-orange-500", label: "Stopped", animate: false }
       case "failed":
       case "error":
         return { color: "bg-red-500", label: "Error", animate: false }
@@ -79,6 +81,10 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
   
   // Calculate schedule interval from execution history
   const calculateScheduleInterval = (): string => {
+    if (agent.status === "completed") {
+      return "No future runs"
+    }
+    
     if (!agent.executionHistory || agent.executionHistory.length < 2) {
       return agent.schedule || "Unknown"
     }
@@ -160,7 +166,9 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
               size="icon" 
               className="h-8 w-8"
               onClick={() => onToggleStatus(agent.id)}
+              disabled={agent.status === "completed"}
               title={
+                agent.status === "completed" ? "Agent has completed all executions" :
                 agent.status === "active" ? "Pause agent" : 
                 agent.status === "scheduled" ? "Pause agent" : 
                 "Resume agent"
@@ -176,11 +184,15 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>
+                <DropdownMenuItem disabled={agent.status === "completed"}>
                   <Edit className="mr-2 h-4 w-4" />
                   Edit Agent
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive" onClick={() => onDelete(agent.id)}>
+                <DropdownMenuItem 
+                  className="text-destructive" 
+                  onClick={() => onDelete(agent.id)}
+                  disabled={agent.status === "completed"}
+                >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Agent
                 </DropdownMenuItem>

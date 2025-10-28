@@ -6,6 +6,7 @@ export interface Agent {
   ownerAddress: string
   handlerContract: string
   handlerUuid?: string
+  chainId?: string
   status: string
   scheduledAt: string
   nickname?: string
@@ -26,8 +27,11 @@ export interface SyncResponse {
   data: {
     user: { id: string; address: string; nickname?: string }
     agents: Agent[]
+    completedAgents?: Agent[]
     scanSummary: {
       totalFound: number
+      activeCount?: number
+      completedCount?: number
       processed: number
       scannedAt: string
       cached?: boolean

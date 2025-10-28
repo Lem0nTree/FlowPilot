@@ -76,15 +76,16 @@ class AgentScannerService {
       console.log(`✅ Found ${allTransactions.length} total transactions for ${userAddress}`);
 
       // Build execution chains
-      const { activeAgents, executionData } = this.buildExecutionChains(allTransactions);
+      const { activeAgents, completedAgents } = this.buildExecutionChains(allTransactions);
 
-      console.log(`✅ Identified ${activeAgents.length} active agents with execution history`);
+      console.log(`✅ Identified ${activeAgents.length} active agents and ${completedAgents.length} completed agents`);
 
       return {
         success: true,
         activeAgents: activeAgents,
+        completedAgents: completedAgents,
         allTransactions: allTransactions.map(tx => this.mapAgentData(tx)),
-        totalFound: activeAgents.length,
+        totalFound: activeAgents.length + completedAgents.length,
         scannedAt: new Date().toISOString()
       };
 
@@ -106,96 +107,109 @@ class AgentScannerService {
 
   /**
    * Build execution chains from all transactions
-   * Groups transactions by handler_uuid and traces execution history
+   * Groups transactions by following scheduled_transaction → completed_transaction linkage
    * @param {Array} transactions - All transactions from API
-   * @returns {Object} - Active agents with execution chains
+   * @returns {Object} - Active and completed agents with execution chains
    */
   buildExecutionChains(transactions) {
-    // Group transactions by handler_uuid
-    const handlerGroups = {};
+    // Build maps for efficient lookups
+    const txByScheduledId = new Map(); // scheduled_transaction → tx
+    const completedTxIds = new Set(); // all completed_transaction IDs
     
     transactions.forEach(tx => {
-      const uuid = tx.handler_uuid;
-      if (!uuid) return;
-      
-      if (!handlerGroups[uuid]) {
-        handlerGroups[uuid] = [];
+      if (tx.scheduled_transaction) {
+        txByScheduledId.set(tx.scheduled_transaction, tx);
       }
-      handlerGroups[uuid].push(tx);
+      if (tx.completed_transaction) {
+        completedTxIds.add(tx.completed_transaction);
+      }
     });
-
+    
+    // Find chain heads (scheduled_tx not in anyone's completed_tx)
+    const heads = transactions.filter(tx => 
+      tx.scheduled_transaction && !completedTxIds.has(tx.scheduled_transaction)
+    );
+    
     const activeAgents = [];
-
-    // Process each handler group
-    Object.entries(handlerGroups).forEach(([uuid, txList]) => {
-      // Find the current scheduled transaction (this is the "active" agent)
-      const scheduledTx = txList.find(tx => tx.status === 'scheduled');
+    const completedAgents = [];
+    
+    // Walk each chain
+    heads.forEach(head => {
+      const chain = [];
+      let current = head;
+      let lastCompletedTx = null;
       
-      if (!scheduledTx) {
-        // No scheduled transaction means this agent is no longer active
-        return;
+      // Walk forward through the chain
+      while (current) {
+        chain.push(current);
+        lastCompletedTx = current.completed_transaction;
+        
+        // Find next transaction in chain
+        current = lastCompletedTx ? 
+          txByScheduledId.get(lastCompletedTx) : null;
       }
-
-      // Build execution chain by walking backwards through completed transactions
-      const executionChain = [];
-      const txMap = new Map(txList.map(tx => [tx.scheduled_transaction, tx]));
       
-      let successCount = 0;
-      let failedCount = 0;
-      let lastExecutionDate = null;
-
-      // Walk the chain backwards from most recent completed transactions
-      txList.forEach(tx => {
-        if (tx.is_completed && tx.status !== 'scheduled') {
-          executionChain.push({
-            scheduledTxId: tx.id,
-            completedTxId: tx.completed_transaction,
-            status: tx.status,
-            scheduledAt: tx.scheduled_at,
-            completedAt: tx.completed_at,
-            blockHeight: tx.block_height,
-            completedBlockHeight: tx.completed_block_height,
-            fees: tx.fees,
-            executionEffort: tx.execution_effort,
-            error: tx.error
-          });
-
-          if (tx.status === 'executed') {
-            successCount++;
-          } else if (tx.status === 'failed') {
-            failedCount++;
-          }
-
-          // Track most recent execution
-          if (tx.completed_at) {
-            const completedDate = new Date(tx.completed_at);
-            if (!lastExecutionDate || completedDate > lastExecutionDate) {
-              lastExecutionDate = completedDate;
-            }
-          }
-        }
-      });
-
-      // Sort execution chain by completion time (most recent first)
-      executionChain.sort((a, b) => {
-        const dateA = new Date(a.completedAt || 0);
-        const dateB = new Date(b.completedAt || 0);
-        return dateB - dateA;
-      });
-
-      // Create the active agent with execution data
-      const agentData = this.mapAgentData(scheduledTx);
-      agentData.totalRuns = executionChain.length;
-      agentData.successfulRuns = successCount;
-      agentData.failedRuns = failedCount;
-      agentData.lastExecutionAt = lastExecutionDate;
-      agentData.executionHistory = executionChain;
-      agentData.handlerUuid = uuid;
-
-      activeAgents.push(agentData);
+      // Determine if chain is active or completed
+      const lastTx = chain[chain.length - 1];
+      const isActive = lastTx.status === 'scheduled';
+      const isCompleted = !isActive && lastCompletedTx && 
+        !txByScheduledId.has(lastCompletedTx);
+      
+      if (isActive) {
+        // Active agent - last tx is scheduled
+        activeAgents.push(this.buildAgentFromChain(chain, true));
+      } else if (isCompleted) {
+        // Completed agent - chain has ended
+        completedAgents.push(this.buildAgentFromChain(chain, false));
+      }
     });
+    
+    return { activeAgents, completedAgents };
+  }
 
-    return { activeAgents };
+  /**
+   * Build agent data from a transaction chain
+   * @param {Array} chain - Array of transactions in the chain
+   * @param {Boolean} isActive - Whether the agent is active or completed
+   * @returns {Object} - Agent data with execution history
+   */
+  buildAgentFromChain(chain, isActive) {
+    // The "active" transaction is the most recent scheduled one
+    const activeTx = chain[chain.length - 1];
+    
+    // Build execution history from completed transactions
+    const executionHistory = chain
+      .filter(tx => tx.is_completed)
+      .sort((a, b) => 
+        new Date(b.completed_at) - new Date(a.completed_at)
+      )
+      .map(tx => ({
+        scheduledTxId: tx.id,
+        completedTxId: tx.completed_transaction,
+        status: tx.status,
+        scheduledAt: tx.scheduled_at,
+        completedAt: tx.completed_at,
+        blockHeight: tx.block_height,
+        completedBlockHeight: tx.completed_block_height,
+        fees: tx.fees,
+        executionEffort: tx.execution_effort,
+        error: tx.error
+      }));
+    
+    const successCount = executionHistory.filter(ex => ex.status === 'executed').length;
+    const failedCount = executionHistory.filter(ex => ex.status === 'failed').length;
+    const lastExecution = executionHistory[0]?.completedAt;
+    
+    const agentData = this.mapAgentData(activeTx);
+    agentData.totalRuns = executionHistory.length;
+    agentData.successfulRuns = successCount;
+    agentData.failedRuns = failedCount;
+    agentData.lastExecutionAt = lastExecution;
+    agentData.executionHistory = executionHistory;
+    agentData.isActive = isActive;
+    agentData.chainId = chain[0].scheduled_transaction; // Use first scheduled_tx as unique chain ID
+    
+    return agentData;
   }
 
   /**

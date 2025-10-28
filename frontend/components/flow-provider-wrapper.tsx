@@ -40,13 +40,13 @@ export function FlowProviderWrapper({ children }: FlowProviderWrapperProps) {
     <div className={theme === "dark" ? "dark" : ""}>
       <FlowProvider
         config={{
-          accessNodeUrl: 'https://rest-testnet.onflow.org',
-          flowNetwork: 'testnet',
-          appDetailTitle: 'FlowPilot Agent Cockpit',
-          appDetailIcon: 'https://flowpilot.app/icon.png',
-          appDetailDescription: 'Manage your on-chain automation agents',
-          appDetailUrl: 'https://flowpilot.app',
-          discoveryWallet: 'https://fcl-discovery.onflow.org/testnet/authn',
+          accessNodeUrl: process.env.NEXT_PUBLIC_ACCESS_NODE || 'https://rest-testnet.onflow.org',
+          flowNetwork: (process.env.NEXT_PUBLIC_FLOW_NETWORK as any) || 'testnet',
+          appDetailTitle: process.env.NEXT_PUBLIC_APP_TITLE || 'FlowPilot Agent Cockpit',
+          appDetailIcon: process.env.NEXT_PUBLIC_APP_ICON || 'https://flowpilot.app/icon.png',
+          appDetailDescription: process.env.NEXT_PUBLIC_APP_DESCRIPTION || 'Manage your on-chain automation agents',
+          appDetailUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://flowpilot.app',
+          discoveryWallet: process.env.NEXT_PUBLIC_DISCOVERY_WALLET || 'https://fcl-discovery.onflow.org/testnet/authn',
           walletconnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '20011d073e05a979e592a9faa846bfab',
         }}
         flowJson={flowJSON}

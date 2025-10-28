@@ -137,6 +137,8 @@ export function AgentCockpitWrapper() {
   const [activeTxId, setActiveTxId] = useState<string | null>(null)
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
   const [hasRefreshedAfterTx, setHasRefreshedAfterTx] = useState(false)
+  const [pendingAgentConfig, setPendingAgentConfig] = useState<any>(null)
+  const [isInitializingHandler, setIsInitializingHandler] = useState(false)
 
   // Load agents on mount if user is logged in
   useEffect(() => {
@@ -386,8 +388,20 @@ export function AgentCockpitWrapper() {
     }
 
     try {
+      // Force refetch handler status from blockchain before proceeding
+      const result = await refetchHandlerStatus()
+      const handlerExists = result.data
+      const queryFailed = result.error || result.isError
+      
+      console.log("Handler status check:", { handlerExists, queryFailed, result })
+      
       // Check if handler is initialized
-      if (!isHandlerInitialized) {
+      // If query failed, assume handler exists to avoid duplicate initialization
+      if (handlerExists === false && !queryFailed) {
+        // Store config for later use after initialization
+        setPendingAgentConfig(config)
+        setIsInitializingHandler(true)
+        
         toast({
           title: "Initializing Handler",
           description: "Setting up your payment handler...",
@@ -404,41 +418,13 @@ export function AgentCockpitWrapper() {
         setHasRefreshedAfterTx(false)
         setTransactionDialogOpen(true)
         
-        // Wait for initialization to complete and refetch status
-        await new Promise((resolve) => setTimeout(resolve, 3000))
-        await refetchHandlerStatus()
+        // Transaction dialog will handle the rest via onSuccess callback
+        return
       }
 
-      // Schedule the payment
-      toast({
-        title: "Scheduling Payment",
-        description: "Creating your payment agent...",
-      })
-
-      const txId = await schedulePayment({
-        cadence: SCHEDULE_PAYMENT_CRON_TX,
-        args: (arg, t) => [
-          arg(config.destinationAddress, t.Address),
-          arg(config.amount.toFixed(8), t.UFix64),
-          arg(config.intervalSeconds.toFixed(1), t.UFix64),
-          arg(config.priority, t.UInt8),
-          arg(config.executionEffort.toString(), t.UInt64),
-          arg(config.maxExecutions, t.Optional(t.UInt64)),
-          arg(config.timestamp === 0 ? null : config.timestamp.toFixed(1), t.Optional(t.UFix64)),
-        ],
-        limit: 9999,
-      })
-
-      setActiveTxId(txId)
-      setHasRefreshedAfterTx(false) // Reset refresh flag for new transaction
-      setTransactionDialogOpen(true)
-
-      toast({
-        title: "Agent Created!",
-        description: "Your payment agent has been scheduled successfully",
-      })
+      // Handler is initialized (or query failed, so we proceed), schedule the payment
+      await schedulePaymentAgent(config)
       
-      handleCloseSidebar()
     } catch (error: any) {
       console.error("Failed to create agent:", error)
       const { title, description } = handleFCLError(error)
@@ -447,7 +433,41 @@ export function AgentCockpitWrapper() {
         description,
         variant: "destructive",
       })
+      setIsInitializingHandler(false)
+      setPendingAgentConfig(null)
     }
+  }
+
+  const schedulePaymentAgent = async (config: any) => {
+    toast({
+      title: "Scheduling Payment",
+      description: "Creating your payment agent...",
+    })
+
+    const txId = await schedulePayment({
+      cadence: SCHEDULE_PAYMENT_CRON_TX,
+      args: (arg, t) => [
+        arg(config.destinationAddress, t.Address),
+        arg(config.amount.toFixed(8), t.UFix64),
+        arg(config.intervalSeconds.toFixed(1), t.UFix64),
+        arg(config.priority, t.UInt8),
+        arg(config.executionEffort.toString(), t.UInt64),
+        arg(config.maxExecutions, t.Optional(t.UInt64)),
+        arg(config.timestamp === 0 ? null : config.timestamp.toFixed(1), t.Optional(t.UFix64)),
+      ],
+      limit: 9999,
+    })
+
+    setActiveTxId(txId)
+    setHasRefreshedAfterTx(false)
+    setTransactionDialogOpen(true)
+
+    toast({
+      title: "Agent Created!",
+      description: "Your payment agent has been scheduled successfully",
+    })
+    
+    handleCloseSidebar()
   }
 
   const handleManualImport = () => {
@@ -647,14 +667,68 @@ export function AgentCockpitWrapper() {
           successTitle="Transaction Complete"
           successDescription="Your agent has been updated successfully"
           closeOnSuccess={true}
-          onSuccess={() => {
+          onSuccess={async () => {
             // Only refresh once per transaction
             if (!hasRefreshedAfterTx) {
               setHasRefreshedAfterTx(true)
-              // Add a small delay to ensure blockchain state is updated
-              setTimeout(() => {
-                loadAgents(true)
-              }, 2000)
+              
+              // If we just initialized the handler, proceed to schedule the pending agent
+              if (isInitializingHandler && pendingAgentConfig) {
+                // Wait for blockchain state to update, then refetch handler status
+                setTimeout(async () => {
+                  const result = await refetchHandlerStatus()
+                  const handlerExists = result.data
+                  const queryFailed = result.error || result.isError
+                  
+                  console.log("Post-init handler check:", { handlerExists, queryFailed })
+                  
+                  // If handler exists OR query failed (assume success since tx succeeded)
+                  if (handlerExists === true || queryFailed) {
+                    setIsInitializingHandler(false)
+                    const configToSchedule = pendingAgentConfig
+                    setPendingAgentConfig(null)
+                    
+                    // Now schedule the payment agent
+                    try {
+                      await schedulePaymentAgent(configToSchedule)
+                    } catch (error: any) {
+                      console.error("Failed to schedule agent after initialization:", error)
+                      const { title, description } = handleFCLError(error)
+                      toast({
+                        title,
+                        description,
+                        variant: "destructive",
+                      })
+                    }
+                  } else {
+                    // Handler definitely doesn't exist - show error
+                    setIsInitializingHandler(false)
+                    setPendingAgentConfig(null)
+                    toast({
+                      title: "Initialization Check Failed",
+                      description: "Could not verify handler initialization. Proceeding anyway...",
+                    })
+                    
+                    // Proceed anyway since the tx succeeded
+                    try {
+                      await schedulePaymentAgent(pendingAgentConfig)
+                    } catch (error: any) {
+                      console.error("Failed to schedule agent:", error)
+                      const { title, description } = handleFCLError(error)
+                      toast({
+                        title,
+                        description,
+                        variant: "destructive",
+                      })
+                    }
+                  }
+                }, 2000)
+              } else {
+                // Regular transaction - just refresh agents list
+                setTimeout(() => {
+                  loadAgents(true)
+                }, 2000)
+              }
             }
           }}
         />

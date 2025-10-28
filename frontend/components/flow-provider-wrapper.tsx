@@ -43,9 +43,9 @@ export function FlowProviderWrapper({ children }: FlowProviderWrapperProps) {
           accessNodeUrl: process.env.NEXT_PUBLIC_ACCESS_NODE || 'https://rest-testnet.onflow.org',
           flowNetwork: (process.env.NEXT_PUBLIC_FLOW_NETWORK as any) || 'testnet',
           appDetailTitle: process.env.NEXT_PUBLIC_APP_TITLE || 'FlowPilot Agent Cockpit',
-          appDetailIcon: process.env.NEXT_PUBLIC_APP_ICON || 'https://flowpilot.app/icon.png',
+          appDetailIcon: process.env.NEXT_PUBLIC_APP_ICON || 'https://flowpilot.up.railway.app/icon.png',
           appDetailDescription: process.env.NEXT_PUBLIC_APP_DESCRIPTION || 'Manage your on-chain automation agents',
-          appDetailUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://flowpilot.app',
+          appDetailUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://flowpilot.up.railway.app',
           discoveryWallet: process.env.NEXT_PUBLIC_DISCOVERY_WALLET || 'https://fcl-discovery.onflow.org/testnet/authn',
           walletconnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '20011d073e05a979e592a9faa846bfab',
         }}

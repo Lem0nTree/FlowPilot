@@ -1,4 +1,10 @@
 {
+	"fcl": {
+		"discovery.authn.endpoint": "https://fcl-discovery.onflow.org/testnet/authn",
+		"discovery.authn.include": ["0x82ec283f88a62e65", "0x9d2e3789e7825516"],
+		"discovery.authn.method": "POP/RPC",
+		"fcl.limit": 1000
+	},
 	"contracts": {
 		"Counter": {
 			"source": "cadence/contracts/Counter.cdc",

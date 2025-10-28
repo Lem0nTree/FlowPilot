@@ -8,11 +8,11 @@ import { useFlowQuery, useFlowMutate } from "@onflow/react-sdk"
 export function usePaymentHandlerStatus(address?: string) {
   return useFlowQuery({
     cadence: `
-      import "PaymentCronTransactionHandler"
+      import PaymentCronTransactionHandler from 0x6cc67be8d78c0bd1
       
       access(all) fun main(address: Address): Bool {
         let account = getAccount(address)
-        return account.storage.borrow<&AnyResource>(
+        return account.storage.borrow<&PaymentCronTransactionHandler.Handler>(
           from: /storage/PaymentCronTransactionHandler
         ) != nil
       }
@@ -24,7 +24,10 @@ export function usePaymentHandlerStatus(address?: string) {
     },
     query: { 
       enabled: !!address,
-      staleTime: 30000,
+      staleTime: 0, // Always fetch fresh data from blockchain
+      refetchOnMount: true,
+      refetchOnWindowFocus: false,
+      retry: 2, // Retry failed queries
     },
   })
 }

@@ -112,6 +112,12 @@
 				"mainnet": "1d7e57aa55817448",
 				"testnet": "631e88ae7f1d7c20"
 			}
+		},
+		"PaymentCronTransactionHandler": {
+			"source": "testnet://6cc67be8d78c0bd1.PaymentCronTransactionHandler",
+			"aliases": {
+				"testnet": "6cc67be8d78c0bd1"
+			}
 		}
 	},
 	"networks": {

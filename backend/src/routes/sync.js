@@ -228,10 +228,38 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
     };
 
     if (agentsToCreate.length > 0) {
-      await prisma.agent.createMany({
-        data: agentsToCreate,
-      });
-      results.created = agentsToCreate.length;
+      // Use upsert for each agent to handle race conditions
+      for (const agentData of agentsToCreate) {
+        try {
+          await prisma.agent.upsert({
+            where: { scheduledTxId: agentData.scheduledTxId },
+            update: {
+              // Update with latest data if it already exists
+              status: agentData.status,
+              scheduledAt: agentData.scheduledAt,
+              priority: agentData.priority,
+              executionEffort: agentData.executionEffort,
+              fees: agentData.fees,
+              totalRuns: agentData.totalRuns,
+              successfulRuns: agentData.successfulRuns,
+              failedRuns: agentData.failedRuns,
+              lastExecutionAt: agentData.lastExecutionAt,
+              executionHistory: agentData.executionHistory,
+              isActive: true,
+              updatedAt: new Date()
+            },
+            create: agentData
+          });
+          results.created++;
+        } catch (error) {
+          // If it's a unique constraint error, the agent already exists - skip
+          if (error.code === 'P2002') {
+            console.log(`⚠️ Agent ${agentData.scheduledTxId} already exists, skipping creation`);
+            continue;
+          }
+          throw error; // Re-throw other errors
+        }
+      }
       console.log(`📝 Created ${results.created} new agents`);
     }
 

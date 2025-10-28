@@ -5,6 +5,8 @@ import { useFlowCurrentUser, useDarkMode, Connect, TransactionDialog } from "@on
 import { useTheme } from "@/contexts/theme-context"
 import { backendAPI, type Agent as BackendAgent } from "@/lib/api/client"
 import { useAgentActions } from "@/lib/flow/agent-hooks"
+import { usePaymentHandlerStatus, useInitializePaymentHandler, useSchedulePaymentCron } from "@/lib/flow/payment-agent-hooks"
+import { INIT_PAYMENT_HANDLER_TX, SCHEDULE_PAYMENT_CRON_TX } from "@/lib/flow/cadence-transactions"
 import { handleFCLError } from "@/lib/flow/error-handler"
 import { AgentRow } from "@/components/agent-row"
 import { EmptyState } from "@/components/empty-state"
@@ -112,6 +114,11 @@ export function AgentCockpitWrapper() {
     deleteError,
   } = useAgentActions()
   
+  // Payment agent hooks
+  const { data: isHandlerInitialized, refetch: refetchHandlerStatus } = usePaymentHandlerStatus(user?.addr)
+  const { mutateAsync: initializeHandler } = useInitializePaymentHandler()
+  const { mutateAsync: schedulePayment } = useSchedulePaymentCron()
+  
   // Initialize agents from cache
   const cachedAgents = useMemo(() => getCachedAgents(), [])
   const [agents, setAgents] = useState<Agent[]>(cachedAgents)
@@ -129,6 +136,7 @@ export function AgentCockpitWrapper() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [activeTxId, setActiveTxId] = useState<string | null>(null)
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false)
+  const [hasRefreshedAfterTx, setHasRefreshedAfterTx] = useState(false)
 
   // Load agents on mount if user is logged in
   useEffect(() => {
@@ -280,9 +288,11 @@ export function AgentCockpitWrapper() {
       if (isPausing) {
         txId = await pauseAgent(agentId, agent.scheduledTxId)
         setActiveTxId(txId)
+        setHasRefreshedAfterTx(false)
       } else {
         txId = await resumeAgent(agentId, agent.scheduledTxId)
         setActiveTxId(txId)
+        setHasRefreshedAfterTx(false)
       }
 
       // Update local state
@@ -326,6 +336,7 @@ export function AgentCockpitWrapper() {
       
       const txId = await deleteAgent(selectedAgentId, agent.scheduledTxId)
       setActiveTxId(txId)
+      setHasRefreshedAfterTx(false)
 
       setAgents((prev) => prev.filter((a) => a.id !== selectedAgentId))
 
@@ -364,14 +375,79 @@ export function AgentCockpitWrapper() {
     setSelectedTemplateId(null)
   }
 
-  const handleCreateAgent = (config: any) => {
-    console.log("[FlowPilot] Creating agent with config:", config)
-    toast({
-      title: "Agent Created",
-      description: "Your automated agent has been created successfully",
-    })
-    handleCloseSidebar()
-    // TODO: Integrate with actual agent creation logic
+  const handleCreateAgent = async (config: any) => {
+    if (!user?.addr) {
+      toast({
+        title: "Wallet Not Connected",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Check if handler is initialized
+      if (!isHandlerInitialized) {
+        toast({
+          title: "Initializing Handler",
+          description: "Setting up your payment handler...",
+        })
+        
+        // Initialize handler first
+        const initTxId = await initializeHandler({
+          cadence: INIT_PAYMENT_HANDLER_TX,
+          args: (arg, t) => [],
+          limit: 9999,
+        })
+        
+        setActiveTxId(initTxId)
+        setHasRefreshedAfterTx(false)
+        setTransactionDialogOpen(true)
+        
+        // Wait for initialization to complete and refetch status
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+        await refetchHandlerStatus()
+      }
+
+      // Schedule the payment
+      toast({
+        title: "Scheduling Payment",
+        description: "Creating your payment agent...",
+      })
+
+      const txId = await schedulePayment({
+        cadence: SCHEDULE_PAYMENT_CRON_TX,
+        args: (arg, t) => [
+          arg(config.destinationAddress, t.Address),
+          arg(config.amount.toFixed(8), t.UFix64),
+          arg(config.intervalSeconds.toFixed(1), t.UFix64),
+          arg(config.priority, t.UInt8),
+          arg(config.executionEffort.toString(), t.UInt64),
+          arg(config.maxExecutions, t.Optional(t.UInt64)),
+          arg(config.timestamp === 0 ? null : config.timestamp.toFixed(1), t.Optional(t.UFix64)),
+        ],
+        limit: 9999,
+      })
+
+      setActiveTxId(txId)
+      setHasRefreshedAfterTx(false) // Reset refresh flag for new transaction
+      setTransactionDialogOpen(true)
+
+      toast({
+        title: "Agent Created!",
+        description: "Your payment agent has been scheduled successfully",
+      })
+      
+      handleCloseSidebar()
+    } catch (error: any) {
+      console.error("Failed to create agent:", error)
+      const { title, description } = handleFCLError(error)
+      toast({
+        title,
+        description,
+        variant: "destructive",
+      })
+    }
   }
 
   const handleManualImport = () => {
@@ -572,8 +648,14 @@ export function AgentCockpitWrapper() {
           successDescription="Your agent has been updated successfully"
           closeOnSuccess={true}
           onSuccess={() => {
-            // Refresh agents list when transaction completes
-            loadAgents(true)
+            // Only refresh once per transaction
+            if (!hasRefreshedAfterTx) {
+              setHasRefreshedAfterTx(true)
+              // Add a small delay to ensure blockchain state is updated
+              setTimeout(() => {
+                loadAgents(true)
+              }, 2000)
+            }
           }}
         />
       </div>

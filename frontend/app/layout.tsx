@@ -4,7 +4,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import { FlowProviderWrapper } from "@/components/flow-provider-wrapper"
 import { ThemeProvider } from "@/contexts/theme-context"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import "./globals.css"
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -129,16 +129,6 @@ export const metadata: Metadata = {
     ],
   },
   manifest: "/site.webmanifest",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-  ],
-  colorScheme: "light dark",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-  },
   category: "technology",
   classification: "Blockchain, Web3, DeFi, Automation",
   other: {
@@ -149,4 +139,15 @@ export const metadata: Metadata = {
     "msapplication-TileColor": "#00EF8B",
     "msapplication-config": "/browserconfig.xml",
   },
-    };
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
+  colorScheme: "light dark",
+};

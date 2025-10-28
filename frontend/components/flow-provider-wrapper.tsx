@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { FlowProvider } from "@onflow/react-sdk"
 import { useTheme } from "@/contexts/theme-context"
-import flowJSON from "../../flow.json"
+import flowJSON from "../flow.json"
 
 interface FlowProviderWrapperProps {
   children: React.ReactNode

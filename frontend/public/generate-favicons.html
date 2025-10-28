@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FlowPilot Favicon Generator</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .favicon { margin: 10px; border: 1px solid #ccc; }
+        canvas { border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <h1>FlowPilot Favicon Generator</h1>
+    <p>Right-click and save each favicon below:</p>
+    
+    <div class="favicon">
+        <h3>16x16</h3>
+        <canvas id="favicon16" width="16" height="16"></canvas>
+    </div>
+    
+    <div class="favicon">
+        <h3>32x32</h3>
+        <canvas id="favicon32" width="32" height="32"></canvas>
+    </div>
+    
+    <div class="favicon">
+        <h3>180x180 (Apple)</h3>
+        <canvas id="apple" width="180" height="180"></canvas>
+    </div>
+    
+    <div class="favicon">
+        <h3>192x192 (Android)</h3>
+        <canvas id="android192" width="192" height="192"></canvas>
+    </div>
+    
+    <div class="favicon">
+        <h3>512x512 (Android)</h3>
+        <canvas id="android512" width="512" height="512"></canvas>
+    </div>
+
+    <script>
+        function drawFavicon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            
+            // Background circle
+            ctx.fillStyle = '#00EF8B';
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Rocket/Agent icon
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.moveTo(size/2, size * 0.2);
+            ctx.lineTo(size * 0.7, size * 0.4);
+            ctx.lineTo(size * 0.6, size * 0.6);
+            ctx.lineTo(size * 0.6, size * 0.8);
+            ctx.lineTo(size * 0.4, size * 0.9);
+            ctx.lineTo(size * 0.5, size * 0.85);
+            ctx.lineTo(size * 0.5, size * 0.4);
+            ctx.lineTo(size * 0.3, size * 0.4);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Flow dots
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(size * 0.25, size * 0.8, size * 0.08, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.beginPath();
+            ctx.arc(size * 0.8, size * 0.25, size * 0.08, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.arc(size * 0.8, size * 0.8, size * 0.06, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+        
+        // Generate all favicons
+        drawFavicon(document.getElementById('favicon16'), 16);
+        drawFavicon(document.getElementById('favicon32'), 32);
+        drawFavicon(document.getElementById('apple'), 180);
+        drawFavicon(document.getElementById('android192'), 192);
+        drawFavicon(document.getElementById('android512'), 512);
+    </script>
+</body>
+</html>

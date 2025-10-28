@@ -1,149 +1,208 @@
-# Scheduled Transactions Demo: Increment the Counter
+# 🚀 FlowPilot
 
-This example shows how to schedule a transaction that increments the `Counter` in the near future and verify it on the Flow Emulator using the scheduler manager.
+Empowering the Flow Forte upgrade with user‑friendly on‑chain agents.
 
-## Files used
+FlowPilot makes Flow's new Agents and Scheduled Transactions accessible to everyone. We align with Flow's vision of a consumer chain by lowering the technical barrier: before FlowPilot, building with agents and scheduled transactions required deep Cadence and infra expertise. FlowPilot abstracts that complexity with a clean UI, a robust backend, and production‑ready Cadence so anyone can automate on‑chain tasks.
 
-- `cadence/contracts/Counter.cdc`
-- `cadence/contracts/CounterTransactionHandler.cdc`
-- `cadence/transactions/InitSchedulerManager.cdc`
-- `cadence/transactions/InitCounterTransactionHandler.cdc`
-- `cadence/transactions/ScheduleIncrementIn.cdc`
-- `cadence/scripts/GetCounter.cdc`
+[![Flow](https://img.shields.io/badge/Flow-Blockchain-00EF8B?style=flat&logo=flow&logoColor=white)](https://flow.com)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## 1) Start the emulator with Scheduled Transactions
+---
 
-```bash
-flow emulator --block-time 1s
+## 💡 Why we built this
+
+- Agents and scheduled transactions were gated behind a steep technical barrier (Cadence, capabilities, fee estimation, scheduling semantics).
+- Forte unlocks powerful automation primitives; FlowPilot packages them into a friendly product to help mass adoption.
+- We bridge on‑chain automation with a backend that understands agent lifecycles, history, and status—no SDK babysitting on the client.
+
+## ✨ Key features
+
+### End‑to‑end product
+
+- **No Code Agent Creation**: Visual interface for creating agents without writing Cadence code.
+- **Agent Cockpit**: Simple list of Active and Completed agents with color‑coded statuses.
+- **Execution History**: Fees, timestamps, errors, and links to explorers.
+- **Smart Scan**: Backend discovers agents via FindLabs API (scheduled + completed).
+- **Caching**: 5‑minute cache with force refresh; reduces API calls.
+- **Transaction Concatenation**: Handlers schedule the next run during execution for true recurring flows.
+- **Accurate Metrics**: Total/success/failed runs, last execution, and dynamic schedule interval (e.g., "Every 10 minutes").
+
+## 🤖 Available Agent: Automatic Payment (Payment Cron)
+
+### What it does
+
+Automated, recurring FLOW token transfers to any recipient on a fixed cadence. Ideal for subscriptions, salaries, tips, rent, or DCA strategies.
+
+### Why it matters
+
+- Turns Forte's scheduled transactions into a consumer‑grade experience.
+- Handles fees, timing, and safety checks (recipient capability, balance) for you.
+- Chains transactions automatically until completion.
+
+### Parameters
+
+```typescript
+{
+  recipientAddress: Address,    // Who receives payments
+  paymentAmount: UFix64,        // FLOW amount per payment
+  intervalSeconds: UFix64,      // Time between payments
+  priority: UInt8,              // 0=High, 1=Med, 2=Low
+  executionEffort: UInt64,      // >= 10
+  maxExecutions: UInt64?,       // null = unlimited
+  baseTimestamp: UFix64?        // null = now
+}
 ```
 
-Keep this running. Open a new terminal for the next steps.
+### How it works
 
-## 2) Deploy contracts
+**Creation**: User connects wallet → configures payment parameters → system auto-initializes handler if needed → submits scheduling transaction → backend discovers agent via FindLabs API → agent appears in dashboard.
 
-```bash
-flow project deploy --network emulator
-```
+**Execution**: Flow blockchain executes at scheduled time → handler performs payment → calculates next execution time → schedules next transaction (if continuing) → FindLabs indexes both completed and new scheduled transactions → backend updates execution history.
 
-This deploys `Counter` and `CounterTransactionHandler` (see `flow.json`).
+**Status**:
 
-## 3) Initialize the scheduler manager (if not already done)
+| Status | Description | Display |
+|--------|-------------|---------|
+| **Active** | Agent has scheduled transaction, `isActive: true` | 🟢 Green (animated) |
+| **Completed** | All executions finished (reached `maxExecutions`) | ⚪ Gray |
+| **Failed** | Execution encountered error | 🔴 Red |
+| **Paused** | User temporarily stopped execution | 🔵 Blue |
+| **Stopped** | User cancelled scheduled transaction | 🟡 Yellow |
 
-The scheduler manager is now integrated into the scheduling transactions, so this step is optional. The manager will be created automatically when you schedule your first transaction.
+Contract: `PaymentCronTransactionHandler` (testnet `0x6cc67be8d78c0bd1`).
 
-If you want to initialize it separately:
+---
 
-```bash
-flow transactions send cadence/transactions/InitSchedulerManager.cdc \
-  --network emulator \
-  --signer emulator-account
-```
+## 🛠️ Tech Stack
 
-## 4) Initialize the handler capability
+### Blockchain & Flow
+- **Flow React SDK** - Wallet connection and React hooks
+- **FCL** - Flow Client Library for transactions
+- **Cadence** - Smart contract language with custom handlers
+- **Scheduled Transactions** - Native Flow scheduling system
+- **FindLabs API** - Transaction discovery and monitoring
 
-Saves a handler resource at `/storage/CounterTransactionHandler` and issues the correct capability for the scheduler.
+### Frontend
+- **Next.js 15.5.4** - React framework with App Router
+- **TypeScript** - Type-safe development
+- **Tailwind CSS 4** - Styling framework
+- **Radix UI** - Accessible component primitives
+- **React Hook Form + Zod** - Form validation
 
-```bash
-flow transactions send cadence/transactions/InitCounterTransactionHandler.cdc \
-  --network emulator \
-  --signer emulator-account
-```
+### Backend
+- **Node.js 18+** - Runtime environment
+- **Express.js** - Web framework
+- **Prisma ORM** - Type-safe database client
+- **MongoDB** - Document database
+- **Swagger/OpenAPI** - API documentation
 
-## 5) Check the initial counter
+> Looking for technical details?
+>
+> - **Frontend technical documentation**: see [`frontend/README.md`](frontend/README.md).
+> - **Backend technical documentation and API details**: see [`backend/README.md`](backend/README.md).
+> - **Cadence contracts and Payment Agent docs**: see [`cadence/PaymentAgent/README-PAYMENT-CRON.md`](cadence/PaymentAgent/README-PAYMENT-CRON.md).
 
-```bash
-flow scripts execute cadence/scripts/GetCounter.cdc --network emulator
-```
+---
 
-Expected: `Result: 0`
+## 🚀 Quick setup
 
-## 6) Schedule an increment in ~2 seconds
+### Prerequisites
 
-Uses `ScheduleIncrementIn.cdc` to compute a future timestamp relative to the current block. This transaction will automatically create the scheduler manager if it doesn't exist.
+- **Node.js** 18+ ([Download](https://nodejs.org))
+- **MongoDB** Atlas account or local instance ([MongoDB Atlas](https://mongodb.com/cloud/atlas))
+- **Flow CLI** 2.7.1+ ([Install Guide](https://developers.flow.com/tools/flow-cli/install))
+- **Flow Wallet** for testnet ([Flow Wallet](https://wallet.flow.com))
+- **FindLabs API** credentials (contact FindLabs team)
 
-```bash
-flow transactions send cadence/transactions/ScheduleIncrementCounter.cdc \
-  --network emulator \
-  --signer emulator-account \
-  --args-json '[
-    {"type":"UFix64","value":"2.0"},
-    {"type":"UInt8","value":"1"},
-    {"type":"UInt64","value":"1000"},
-    {"type":"Optional","value":null}
-  ]'
-```
-
-Notes:
-
-- Priority `1` = Medium. You can use `0` = High or `2` = Low.
-- `executionEffort` must be >= 10 (1000 is a safe example value).
-- With `--block-time 1s`, blocks seal automatically; after ~3 seconds your scheduled transaction should execute.
-- The transaction uses the scheduler manager to track and manage the scheduled transaction.
-
-## 7) Verify the counter incremented
+### Backend
 
 ```bash
-flow scripts execute cadence/scripts/GetCounter.cdc --network emulator
+cd backend
+npm install
+cp env.example .env
+# Edit .env with MongoDB URL and FindLabs credentials
+npm run db:generate
+npm run db:push
+npm run dev  # Starts on http://localhost:5000
 ```
 
-Expected: `Result: 1`
+### Frontend
 
-## Troubleshooting
-
-- Invalid timestamp error: use `ScheduleIncrementIn.cdc` with a small delay (e.g., 2.0) so the timestamp is in the future.
-- Missing FlowToken vault: on emulator the default account has a vault; if you use a custom account, initialize it accordingly.
-- Manager not found: The scheduler manager is automatically created in the scheduling transactions. If you see this error, ensure you're using the latest transaction files.
-- More docs: see `/.cursor/rules/scheduledtransactions/index.md`, `agent-rules.mdc`, and `flip.md` in this repo.
-
-## 📦 Project Structure
-
-Your project has been set up with the following structure:
-
-- `flow.json` – Project configuration and dependency aliases (string-imports)
-- `/cadence` – Your Cadence code
-
-Inside the `cadence` folder you will find:
-
-- `/contracts` - This folder contains your Cadence contracts (these are deployed to the network and contain the business logic for your application)
-  - `Counter.cdc`
-  - `CounterTransactionHandler.cdc`
-
-- `/scripts` - This folder contains your Cadence scripts (read-only operations)
-  - `GetCounter.cdc`
-
-- `/transactions` - This folder contains your Cadence transactions (state-changing operations)
-  - `IncrementCounter.cdc`
-  - `ScheduleIncrementCounter.cdc`
-  - `InitSchedulerManager.cdc`
-  - `InitCounterTransactionHandler.cdc`
-
-- `/tests` - This folder contains your Cadence tests (integration tests for your contracts, scripts, and transactions to verify they behave as expected)
-  - `Counter_test.cdc`
-  - `CounterTransactionHandler_test.cdc`
-
-
-## 🔧 Additional CLI Commands
-
-If you need to perform additional setup or management tasks:
-
-**Install dependencies** (if you add new imports that require external contracts):
 ```bash
-flow dependencies install
+cd frontend
+npm install
+npm run dev  # Starts on http://localhost:3000
 ```
 
-**Create new accounts**:
-```bash
-flow accounts create
-```
+### Test the flow
 
-**See all available CLI commands**: Check out the [Flow CLI Commands Overview](https://developers.flow.com/build/tools/flow-cli/commands)
+1. **Open FlowPilot**: Navigate to http://localhost:3000
+2. **Connect Wallet**: Click "Connect Wallet" and authenticate with Flow testnet wallet
+3. **Ensure Testnet FLOW**: Make sure your wallet has testnet FLOW tokens ([Faucet](https://testnet-faucet.onflow.org))
+4. **Build Agent**: Click "Build New Agent" button
+5. **Configure Payment**:
+   - Enter recipient address
+   - Set payment amount (e.g., 0.1 FLOW)
+   - Choose interval (e.g., Every 10 minutes)
+   - Set number of repetitions (e.g., 5 payments)
+6. **Create Agent**: Click "Create Agent" and approve blockchain transaction
+7. **Wait for Sync**: Agent appears in dashboard (or use refresh button)
+8. **Monitor Execution**: Watch status updates and execution history
 
-## 🔨 Additional Resources
+**Troubleshooting:**
+- If agent doesn't appear, click the floating refresh button
+- Check backend console for FindLabs API connection logs
+- Verify `NODE_ENV=testnet` in backend `.env`
+- Ensure wallet has sufficient FLOW for payments + fees
 
-Here are some essential resources to help you learn more:
+---
 
-- **[Flow Documentation](https://developers.flow.com/)** - The official Flow Documentation is a great starting point for learning about [building](https://developers.flow.com/build/flow) on Flow.
-- **[Cadence Documentation](https://cadence-lang.org/docs/language)** - Cadence is the native language for the Flow Blockchain. It is a resource-oriented programming language designed for developing smart contracts.
-- **[Visual Studio Code](https://code.visualstudio.com/)** and the **[Cadence Extension](https://marketplace.visualstudio.com/items?itemName=onflow.cadence)** - Recommended IDE with syntax highlighting, code completion, and other features for Cadence development.
-- **[Flow Clients](https://developers.flow.com/tools/clients)** - Clients available in multiple languages to interact with the Flow Blockchain.
-- **[Block Explorers](https://developers.flow.com/ecosystem/block-explorers)** - Tools to explore on-chain data. [Flowser](https://flowser.dev/) is a powerful block explorer for local development.
+## 📚 Documentation
+
+### Technical Deep Dives
+
+- **[Frontend Documentation](frontend/README.md)** - Next.js setup, components, Flow integration
+- **[Backend Documentation](backend/README.md)** - API endpoints, database schema, FindLabs integration
+- **[Payment Agent Guide](cadence/PaymentAgent/README-PAYMENT-CRON.md)** - Complete Cadence implementation guide
+
+### Official Resources
+
+- **Flow Documentation**: https://developers.flow.com
+- **Cadence Language**: https://cadence-lang.org/docs
+- **Flow React SDK**: https://react.flow.com
+- **Scheduled Transactions**: https://developers.flow.com/build/advanced-concepts/scheduled-transactions
+- **FLIP 330 Specification**: https://github.com/onflow/flips/blob/main/protocol/20250609-scheduled-callbacks.md
+
+---
+
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **Flow Team** - For the incredible blockchain platform and Scheduled Transactions feature
+- **FindLabs** - For the transaction discovery API
+- **Radix UI** - For the accessible component library
+- **Vercel** - For Next.js and deployment platform
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please feel free to submit issues, fork the repository, and create pull requests.
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+**Built with ❤️ for the Flow ecosystem**

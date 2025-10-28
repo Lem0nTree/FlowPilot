@@ -1,41 +1,51 @@
-import { useFlowMutate } from "@onflow/react-sdk"
+import { useFlowMutate, useFlowScheduledTransactionCancel } from "@onflow/react-sdk"
 import { backendAPI } from "../api/client"
 import { handleFCLError } from "./error-handler"
 import { useAgentAuthorization } from "./auth"
 
-// Transaction Cadence code
+// Transaction Cadence code - Uses Manager resource to cancel scheduled transaction
 const PAUSE_AGENT_TRANSACTION = `
-import FlowTransactionScheduler from 0xFlowTransactionScheduler
+import "FlowTransactionSchedulerUtils"
 
-transaction(scheduledTxId: String) {
+transaction(scheduledTxId: UInt64) {
   prepare(signer: auth(Storage) &Account) {
-    // Get the scheduled transaction and cancel it
-    let scheduler = FlowTransactionScheduler.getScheduler()
-    scheduler.cancel(id: scheduledTxId)
+    // Borrow the Manager resource from storage
+    let manager = signer.storage.borrow<auth(FlowTransactionSchedulerUtils.Owner) &{FlowTransactionSchedulerUtils.Manager}>(
+      from: FlowTransactionSchedulerUtils.managerStoragePath
+    ) ?? panic("Could not borrow Manager reference")
+    
+    // Cancel the scheduled transaction through the Manager
+    manager.cancelByID(scheduledTxId)
   }
 }
 `
 
 const RESUME_AGENT_TRANSACTION = `
-import FlowTransactionScheduler from 0xFlowTransactionScheduler
+import "FlowTransactionSchedulerUtils"
 
-transaction(scheduledTxId: String) {
+transaction(scheduledTxId: UInt64) {
   prepare(signer: auth(Storage) &Account) {
-    // Reschedule the transaction
-    // Implementation depends on your agent contract design
+    // Note: Flow Scheduled Transactions cannot be "resumed" after cancellation.
+    // To resume an agent, you would need to schedule a new transaction with the same parameters.
+    // This would require storing the original handler and parameters, then calling manager.schedule() again.
+    panic("Resume functionality requires rescheduling - not yet implemented")
   }
 }
 `
 
 const DELETE_AGENT_TRANSACTION = `
-import FlowTransactionScheduler from 0xFlowTransactionScheduler
+import "FlowTransactionSchedulerUtils"
 
-transaction(scheduledTxId: String) {
+transaction(scheduledTxId: UInt64) {
   prepare(signer: auth(Storage) &Account) {
-    // Cancel and remove the scheduled transaction
-    let scheduler = FlowTransactionScheduler.getScheduler()
-    scheduler.cancel(id: scheduledTxId)
-    // Additional cleanup if needed
+    // Borrow the Manager resource from storage
+    let manager = signer.storage.borrow<auth(FlowTransactionSchedulerUtils.Owner) &{FlowTransactionSchedulerUtils.Manager}>(
+      from: FlowTransactionSchedulerUtils.managerStoragePath
+    ) ?? panic("Could not borrow Manager reference")
+    
+    // Cancel the scheduled transaction through the Manager
+    // This will also trigger a partial fee refund
+    manager.cancelByID(scheduledTxId)
   }
 }
 `
@@ -114,7 +124,7 @@ export function useAgentActions() {
     return new Promise<string>((resolve, reject) => {
       pauseMutation.mutate({
         cadence: PAUSE_AGENT_TRANSACTION,
-        args: (arg, t) => [arg(scheduledTxId, t.String)],
+        args: (arg, t) => [arg(scheduledTxId, t.UInt64)],
         authorizations: [authorization],
         limit: 9999,
         agentId
@@ -129,7 +139,7 @@ export function useAgentActions() {
     return new Promise<string>((resolve, reject) => {
       resumeMutation.mutate({
         cadence: RESUME_AGENT_TRANSACTION,
-        args: (arg, t) => [arg(scheduledTxId, t.String)],
+        args: (arg, t) => [arg(scheduledTxId, t.UInt64)],
         authorizations: [authorization],
         limit: 9999,
         agentId
@@ -144,7 +154,7 @@ export function useAgentActions() {
     return new Promise<string>((resolve, reject) => {
       deleteMutation.mutate({
         cadence: DELETE_AGENT_TRANSACTION,
-        args: (arg, t) => [arg(scheduledTxId, t.String)],
+        args: (arg, t) => [arg(scheduledTxId, t.UInt64)],
         authorizations: [authorization],
         limit: 9999,
         agentId

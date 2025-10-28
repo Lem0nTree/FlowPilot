@@ -27,16 +27,30 @@ npm install
 npm run dev
 ```
 
-### Env
+### Environment Configuration
 
 Create `.env.local`:
 
 ```bash
-NEXT_PUBLIC_API_URL="http://localhost:5000"
-NEXT_PUBLIC_FLOW_NETWORK="testnet"
-NEXT_PUBLIC_ACCESS_NODE="https://rest-testnet.onflow.org"
-NEXT_PUBLIC_DISCOVERY_WALLET="https://fcl-discovery.onflow.org/testnet/authn"
+# Backend API Configuration
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+
+# Flow Network Configuration
+NEXT_PUBLIC_FLOW_NETWORK=testnet
+NEXT_PUBLIC_ACCESS_NODE=https://rest-testnet.onflow.org
+NEXT_PUBLIC_DISCOVERY_WALLET=https://fcl-discovery.onflow.org/testnet/authn
+
+# App Details (optional - defaults provided)
+NEXT_PUBLIC_APP_TITLE=FlowPilot Agent Cockpit
+NEXT_PUBLIC_APP_ICON=https://flowpilot.app/icon.png
+NEXT_PUBLIC_APP_DESCRIPTION=Manage your on-chain automation agents
+NEXT_PUBLIC_APP_URL=https://flowpilot.app
+
+# WalletConnect Configuration (optional - default provided)
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=20011d073e05a979e592a9faa846bfab
 ```
+
+**Note**: All configuration values have sensible defaults, so you only need to override the values you want to change.
 
 ### Key Files
 

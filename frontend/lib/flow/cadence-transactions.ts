@@ -77,10 +77,18 @@ transaction(
             panic("Payment Cron Transaction Handler not initialized. Please run InitPaymentCronTransactionHandler transaction first.")
         }
 
-        if let cap = controllers[0].capability as? Capability<auth(FlowTransactionScheduler.Execute) &{FlowTransactionScheduler.TransactionHandler}> {
-            handlerCap = cap
-        } else if controllers.length > 1 {
-            handlerCap = controllers[1].capability as! Capability<auth(FlowTransactionScheduler.Execute) &{FlowTransactionScheduler.TransactionHandler}>
+        // Iterate through all controllers to find the one with Execute authorization
+        var i = 0
+        while i < controllers.length {
+            if let cap = controllers[i].capability as? Capability<auth(FlowTransactionScheduler.Execute) &{FlowTransactionScheduler.TransactionHandler}> {
+                handlerCap = cap
+                break
+            }
+            i = i + 1
+        }
+        
+        if handlerCap == nil {
+            panic("Could not find authorized handler capability. The handler may not be properly initialized.")
         }
 
         if signer.storage.borrow<&AnyResource>(from: FlowTransactionSchedulerUtils.managerStoragePath) == nil {
@@ -143,7 +151,7 @@ transaction(
         )
 
         let transactionId = manager.schedule(
-            handlerCap: handlerCap ?? panic("Could not get handler capability"),
+            handlerCap: handlerCap!,
             data: cronConfig,
             timestamp: firstExecutionTime,
             priority: pr,

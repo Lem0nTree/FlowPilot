@@ -48,7 +48,13 @@ export function FlowProviderWrapper({ children }: FlowProviderWrapperProps) {
           appDetailUrl: process.env.NEXT_PUBLIC_APP_URL || 'https://flowpilot.up.railway.app',
           discoveryWallet: process.env.NEXT_PUBLIC_DISCOVERY_WALLET || 'https://fcl-discovery.onflow.org/testnet/authn',
           walletconnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '20011d073e05a979e592a9faa846bfab',
-        }}
+          // Contract addresses for string imports (using type assertion for custom config)
+          '0xPaymentCronTransactionHandler': '0x6cc67be8d78c0bd1',
+          '0xFlowTransactionScheduler': '0x8c5303eaa26202d6',
+          '0xFlowTransactionSchedulerUtils': '0x8c5303eaa26202d6',
+          '0xFlowToken': '0x7e60df042a9c0868',
+          '0xFungibleToken': '0x9a0766d93b6608b7',
+        } as any}
         flowJson={flowJSON}
       >
         {children}

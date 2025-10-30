@@ -76,9 +76,15 @@ export function TemplateConfigPanel({ open, templateId, onBack, onCreate }: Temp
       scheduledDate.setHours(hours, minutes, 0, 0)
     }
     
+    // Ensure address has 0x prefix
+    let formattedAddress = destinationAddress.trim()
+    if (formattedAddress && !formattedAddress.startsWith('0x')) {
+      formattedAddress = '0x' + formattedAddress
+    }
+    
     const config = {
       templateId,
-      destinationAddress,
+      destinationAddress: formattedAddress,
       amount: parseFloat(amount),
       timestamp: startNow ? 0 : (scheduledDate ? Math.floor(scheduledDate.getTime() / 1000) : 0),
       intervalSeconds: convertIntervalToSeconds(parseInt(repeatNumber) || 1, repeatInterval),
@@ -140,11 +146,23 @@ export function TemplateConfigPanel({ open, templateId, onBack, onCreate }: Temp
             <Label htmlFor="destination">Destination Address</Label>
             <Input
               id="destination"
-              placeholder="0x..."
+              placeholder="0x1234567890abcdef"
               value={destinationAddress}
-              onChange={(e) => setDestinationAddress(e.target.value)}
+              onChange={(e) => {
+                let value = e.target.value.trim()
+                // Auto-add 0x prefix if user starts typing without it
+                if (value && !value.startsWith('0x') && value.length > 0) {
+                  value = '0x' + value.replace(/^0x/i, '')
+                }
+                setDestinationAddress(value)
+              }}
+              className={destinationAddress && destinationAddress.length < 18 ? "border-yellow-500" : ""}
             />
-            <p className="text-xs text-muted-foreground">The Flow address to send payments to</p>
+            <p className="text-xs text-muted-foreground">
+              {destinationAddress && destinationAddress.length < 18 
+                ? "⚠️ Flow addresses should be 18 characters (0x + 16 hex digits)"
+                : "The Flow address to send payments to"}
+            </p>
           </div>
 
           {/* Amount */}

@@ -387,6 +387,8 @@ export function AgentCockpitWrapper() {
   }
 
   const handleCreateAgent = async (config: any) => {
+    console.log("🎯 handleCreateAgent called with config:", config)
+    
     if (!user?.addr) {
       toast({
         title: "Wallet Not Connected",
@@ -408,6 +410,7 @@ export function AgentCockpitWrapper() {
       // If query failed, assume handler exists to avoid duplicate initialization
       if (handlerExists === false && !queryFailed) {
         // Store config for later use after initialization
+        console.log("💾 Storing config in pendingAgentConfig:", config)
         setPendingAgentConfig(config)
         setIsInitializingHandler(true)
         
@@ -416,12 +419,17 @@ export function AgentCockpitWrapper() {
           description: "Setting up your payment handler...",
         })
         
+        console.log("🔧 Sending handler initialization transaction...")
+        console.log("📜 Init transaction cadence:", INIT_PAYMENT_HANDLER_TX)
+        
         // Initialize handler first
         const initTxId = await initializeHandler({
           cadence: INIT_PAYMENT_HANDLER_TX,
           args: (arg, t) => [],
           limit: 9999,
         })
+        
+        console.log("✅ Init transaction submitted:", initTxId)
         
         setActiveTxId(initTxId)
         setHasRefreshedAfterTx(false)
@@ -448,6 +456,18 @@ export function AgentCockpitWrapper() {
   }
 
   const schedulePaymentAgent = async (config: any) => {
+    console.log("📝 Scheduling payment with config:", config)
+    
+    // Validate config before submitting
+    if (!config.destinationAddress || config.destinationAddress.trim() === '') {
+      toast({
+        title: "Invalid Configuration",
+        description: "Destination address is required",
+        variant: "destructive",
+      })
+      throw new Error("Destination address is required")
+    }
+    
     toast({
       title: "Scheduling Payment",
       description: "Creating your payment agent...",
@@ -455,15 +475,27 @@ export function AgentCockpitWrapper() {
 
     const txId = await schedulePayment({
       cadence: SCHEDULE_PAYMENT_CRON_TX,
-      args: (arg, t) => [
-        arg(config.destinationAddress, t.Address),
-        arg(config.amount.toFixed(8), t.UFix64),
-        arg(config.intervalSeconds.toFixed(1), t.UFix64),
-        arg(config.priority, t.UInt8),
-        arg(config.executionEffort.toString(), t.UInt64),
-        arg(config.maxExecutions, t.Optional(t.UInt64)),
-        arg(config.timestamp === 0 ? null : config.timestamp.toFixed(1), t.Optional(t.UFix64)),
-      ],
+      args: (arg, t) => {
+        console.log("🔧 Building transaction args:", {
+          destinationAddress: config.destinationAddress,
+          amount: config.amount,
+          intervalSeconds: config.intervalSeconds,
+          priority: config.priority,
+          executionEffort: config.executionEffort,
+          maxExecutions: config.maxExecutions,
+          timestamp: config.timestamp,
+        })
+        
+        return [
+          arg(config.destinationAddress, t.Address),
+          arg(config.amount.toFixed(8), t.UFix64),
+          arg(config.intervalSeconds.toFixed(1), t.UFix64),
+          arg(config.priority, t.UInt8),
+          arg(config.executionEffort.toString(), t.UInt64),
+          arg(config.maxExecutions, t.Optional(t.UInt64)),
+          arg(config.timestamp === 0 ? null : config.timestamp.toFixed(1), t.Optional(t.UFix64)),
+        ]
+      },
       limit: 9999,
     })
 
@@ -721,55 +753,54 @@ export function AgentCockpitWrapper() {
               
               // If we just initialized the handler, proceed to schedule the pending agent
               if (isInitializingHandler && pendingAgentConfig) {
-                // Wait for blockchain state to update, then refetch handler status
-                setTimeout(async () => {
-                  const result = await refetchHandlerStatus()
-                  const handlerExists = result.data
-                  const queryFailed = result.error || result.isError
-                  
-                  console.log("Post-init handler check:", { handlerExists, queryFailed })
-                  
-                  // If handler exists OR query failed (assume success since tx succeeded)
-                  if (handlerExists === true || queryFailed) {
-                    setIsInitializingHandler(false)
-                    const configToSchedule = pendingAgentConfig
-                    setPendingAgentConfig(null)
+                // Wait for blockchain state to update, then retry with polling
+                const pollHandlerStatus = async (retries = 5, delayMs = 1000) => {
+                  for (let attempt = 0; attempt < retries; attempt++) {
+                    await new Promise(resolve => setTimeout(resolve, delayMs))
                     
-                    // Now schedule the payment agent
-                    try {
-                      await schedulePaymentAgent(configToSchedule)
-                    } catch (error: any) {
-                      console.error("Failed to schedule agent after initialization:", error)
-                      const { title, description } = handleFCLError(error)
-                      toast({
-                        title,
-                        description,
-                        variant: "destructive",
-                      })
-                    }
-                  } else {
-                    // Handler definitely doesn't exist - show error
-                    setIsInitializingHandler(false)
-                    setPendingAgentConfig(null)
-                    toast({
-                      title: "Initialization Check Failed",
-                      description: "Could not verify handler initialization. Proceeding anyway...",
-                    })
+                    const result = await refetchHandlerStatus()
+                    const handlerExists = result.data
+                    const queryFailed = result.error || result.isError
                     
-                    // Proceed anyway since the tx succeeded
-                    try {
-                      await schedulePaymentAgent(pendingAgentConfig)
-                    } catch (error: any) {
-                      console.error("Failed to schedule agent:", error)
-                      const { title, description } = handleFCLError(error)
-                      toast({
-                        title,
-                        description,
-                        variant: "destructive",
-                      })
+                    console.log(`Post-init handler check (attempt ${attempt + 1}/${retries}):`, { handlerExists, queryFailed })
+                    
+                    if (handlerExists === true) {
+                      // Handler is fully initialized with capabilities
+                      console.log("✅ Handler ready! Proceeding with scheduling. pendingAgentConfig:", pendingAgentConfig)
+                      setIsInitializingHandler(false)
+                      const configToSchedule = pendingAgentConfig
+                      setPendingAgentConfig(null)
+                      
+                      try {
+                        await schedulePaymentAgent(configToSchedule)
+                      } catch (error: any) {
+                        console.error("Failed to schedule agent after initialization:", error)
+                        const { title, description } = handleFCLError(error)
+                        toast({
+                          title,
+                          description,
+                          variant: "destructive",
+                        })
+                      }
+                      return
                     }
+                    
+                    // Not ready yet, increase delay for next attempt
+                    delayMs *= 1.5
                   }
-                }, 2000)
+                  
+                  // Max retries reached - show error
+                  setIsInitializingHandler(false)
+                  setPendingAgentConfig(null)
+                  toast({
+                    title: "Initialization Timeout",
+                    description: "Handler initialization is taking longer than expected. Please try creating the agent again in a moment.",
+                    variant: "destructive",
+                  })
+                }
+                
+                // Start polling
+                pollHandlerStatus()
               } else {
                 // Regular transaction - just refresh agents list
                 setTimeout(() => {

@@ -8,13 +8,20 @@ import { useFlowQuery, useFlowMutate } from "@onflow/react-sdk"
 export function usePaymentHandlerStatus(address?: string) {
   return useFlowQuery({
     cadence: `
-      import PaymentCronTransactionHandler from 0x6cc67be8d78c0bd1
+      import "PaymentCronTransactionHandler"
+      import "FlowTransactionScheduler"
       
       access(all) fun main(address: Address): Bool {
-        let account = getAccount(address)
-        return account.storage.borrow<&PaymentCronTransactionHandler.Handler>(
-          from: /storage/PaymentCronTransactionHandler
-        ) != nil
+        // Get the public account
+        let publicAccount = getAccount(address)
+        
+        // Check if public capability exists (this is published during init)
+        let publicCap = publicAccount.capabilities.get<&{FlowTransactionScheduler.TransactionHandler}>(
+          /public/PaymentCronTransactionHandler
+        )
+        
+        // If public capability exists and is valid, handler is initialized
+        return publicCap.check()
       }
     `,
     args: (arg, t) => {

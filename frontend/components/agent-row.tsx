@@ -242,11 +242,11 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
                 <p className="text-sm font-medium text-foreground">{agent.workflowSummary}</p>
               )}
             </div>
-            {agent.scheduledTxId && (
+            {agent.executionHistory && agent.executionHistory.length > 0 && agent.executionHistory[0].completedTxId && (
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">Last Transaction</p>
                 <a 
-                  href={getTransactionExplorerUrl(agent.scheduledTxId)} 
+                  href={getTransactionExplorerUrl(agent.executionHistory[0].completedTxId)} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="text-sm font-medium text-foreground hover:text-muted-foreground inline-flex items-center gap-1"

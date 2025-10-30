@@ -140,6 +140,7 @@ export function AgentCockpitWrapper() {
   const [hasRefreshedAfterTx, setHasRefreshedAfterTx] = useState(false)
   const [pendingAgentConfig, setPendingAgentConfig] = useState<any>(null)
   const [isInitializingHandler, setIsInitializingHandler] = useState(false)
+  const [isCreatingAgent, setIsCreatingAgent] = useState(false)
 
   // Load agents on mount if user is logged in
   useEffect(() => {
@@ -398,6 +399,9 @@ export function AgentCockpitWrapper() {
       return
     }
 
+    // Set loading state
+    setIsCreatingAgent(true)
+
     try {
       // Force refetch handler status from blockchain before proceeding
       const result = await refetchHandlerStatus()
@@ -452,6 +456,7 @@ export function AgentCockpitWrapper() {
       })
       setIsInitializingHandler(false)
       setPendingAgentConfig(null)
+      setIsCreatingAgent(false)
     }
   }
 
@@ -502,11 +507,6 @@ export function AgentCockpitWrapper() {
     setActiveTxId(txId)
     setHasRefreshedAfterTx(false)
     setTransactionDialogOpen(true)
-
-    toast({
-      title: "Agent Created!",
-      description: "Your payment agent has been scheduled successfully",
-    })
     
     handleCloseSidebar()
   }
@@ -584,6 +584,7 @@ export function AgentCockpitWrapper() {
         templateId={selectedTemplateId || ""}
         onBack={handleBackToTemplates}
         onCreate={handleCreateAgent}
+        isCreating={isCreatingAgent}
       />
 
       <div className="min-h-screen bg-background">
@@ -741,11 +742,15 @@ export function AgentCockpitWrapper() {
           open={transactionDialogOpen}
           onOpenChange={setTransactionDialogOpen}
           txId={activeTxId || undefined}
-          pendingTitle="Processing Transaction"
-          pendingDescription="Your agent action is being processed on the Flow network"
-          successTitle="Transaction Complete"
-          successDescription="Your agent has been updated successfully"
-          closeOnSuccess={true}
+          pendingTitle={isInitializingHandler ? "Initializing Payment Handler" : "Creating Payment Agent"}
+          pendingDescription={isInitializingHandler 
+            ? "Setting up your payment handler for the first time. This only needs to be done once."
+            : "Scheduling your recurring payment agent on the Flow network"}
+          successTitle={isInitializingHandler ? "Handler Initialized" : "Agent Created Successfully"}
+          successDescription={isInitializingHandler 
+            ? "Payment handler is ready. Now scheduling your payment agent..."
+            : "Your payment agent is now active and will execute according to schedule"}
+          closeOnSuccess={!isInitializingHandler}
           onSuccess={async () => {
             // Only refresh once per transaction
             if (!hasRefreshedAfterTx) {
@@ -767,12 +772,19 @@ export function AgentCockpitWrapper() {
                     if (handlerExists === true) {
                       // Handler is fully initialized with capabilities
                       console.log("✅ Handler ready! Proceeding with scheduling. pendingAgentConfig:", pendingAgentConfig)
-                      setIsInitializingHandler(false)
+                      
                       const configToSchedule = pendingAgentConfig
                       setPendingAgentConfig(null)
                       
+                      // Show transition message
+                      toast({
+                        title: "Handler Ready!",
+                        description: "Now scheduling your payment agent...",
+                      })
+                      
                       try {
                         await schedulePaymentAgent(configToSchedule)
+                        // Keep isInitializingHandler true to prevent dialog from closing yet
                       } catch (error: any) {
                         console.error("Failed to schedule agent after initialization:", error)
                         const { title, description } = handleFCLError(error)
@@ -781,6 +793,9 @@ export function AgentCockpitWrapper() {
                           description,
                           variant: "destructive",
                         })
+                        setIsInitializingHandler(false)
+                        setIsCreatingAgent(false)
+                        setTransactionDialogOpen(false)
                       }
                       return
                     }
@@ -792,6 +807,8 @@ export function AgentCockpitWrapper() {
                   // Max retries reached - show error
                   setIsInitializingHandler(false)
                   setPendingAgentConfig(null)
+                  setIsCreatingAgent(false)
+                  setTransactionDialogOpen(false)
                   toast({
                     title: "Initialization Timeout",
                     description: "Handler initialization is taking longer than expected. Please try creating the agent again in a moment.",
@@ -802,10 +819,25 @@ export function AgentCockpitWrapper() {
                 // Start polling
                 pollHandlerStatus()
               } else {
-                // Regular transaction - just refresh agents list
-                setTimeout(() => {
-                  loadAgents(true)
-                }, 2000)
+                // Regular transaction (schedule payment completed)
+                // Reset all states
+                setIsInitializingHandler(false)
+                setIsCreatingAgent(false)
+                
+                // Wait longer for blockchain and API to sync before reloading
+                toast({
+                  title: "Agent Created!",
+                  description: "Waiting for blockchain confirmation...",
+                })
+                
+                setTimeout(async () => {
+                  console.log("🔄 Reloading agents after blockchain sync delay...")
+                  await loadAgents(true)
+                  toast({
+                    title: "Dashboard Updated",
+                    description: "Your new agent is now visible",
+                  })
+                }, 8000) // 8 second delay for blockchain + API sync
               }
             }
           }}

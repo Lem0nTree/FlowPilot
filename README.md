@@ -7,6 +7,11 @@ Flowmatic makes Flow's new Agents and Scheduled Transactions accessible to every
 [![Flow](https://img.shields.io/badge/Flow-Blockchain-00EF8B?style=flat&logo=flow&logoColor=white)](https://flow.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+### 🌐 Live Demo
+
+- **TRY ON MAINNET**: [Flowmatic Mainnet](https://flowmatic.up.railway.app/)
+- **TRY ON TESTNET**: [Flowmatic Testnet](https://flowpilot.up.railway.app)
+
 ---
 
 ## 💡 Why we built this
@@ -69,7 +74,9 @@ Automated, recurring FLOW token transfers to any recipient on a fixed cadence. I
 | **Paused** | User temporarily stopped execution | 🔵 Blue |
 | **Stopped** | User cancelled scheduled transaction | 🟡 Yellow |
 
-Contract: `PaymentCronTransactionHandler` (testnet `0x6cc67be8d78c0bd1`).
+Contract: `PaymentCronTransactionHandler`
+- **Mainnet**: `0x651079a7b572ef10`
+- **Testnet**: `0x6cc67be8d78c0bd1`
 
 ---
 

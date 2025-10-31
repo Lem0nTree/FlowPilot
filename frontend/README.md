@@ -1,4 +1,4 @@
-# FlowPilot Frontend
+# Flowmatic Frontend
 
 Next.js + Flow React SDK UI for creating and managing on‑chain agents.
 
@@ -41,10 +41,10 @@ NEXT_PUBLIC_ACCESS_NODE=https://rest-testnet.onflow.org
 NEXT_PUBLIC_DISCOVERY_WALLET=https://fcl-discovery.onflow.org/testnet/authn
 
 # App Details (optional - defaults provided)
-NEXT_PUBLIC_APP_TITLE=FlowPilot Agent Cockpit
-NEXT_PUBLIC_APP_ICON=https://flowpilot.app/icon.png
+NEXT_PUBLIC_APP_TITLE=Flowmatic Agent Cockpit
+NEXT_PUBLIC_APP_ICON=https://Flowmatic.app/icon.png
 NEXT_PUBLIC_APP_DESCRIPTION=Manage your on-chain automation agents
-NEXT_PUBLIC_APP_URL=https://flowpilot.app
+NEXT_PUBLIC_APP_URL=https://Flowmatic.app
 
 # WalletConnect Configuration (optional - default provided)
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=20011d073e05a979e592a9faa846bfab

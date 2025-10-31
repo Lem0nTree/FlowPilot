@@ -2,14 +2,16 @@ const axios = require('axios');
 
 class AgentScannerService {
   constructor() {
-    // Dynamically choose the API URL based on the environment
-    const isTestnet = process.env.NODE_ENV === 'testnet';
+    // Dynamically choose the API URL based on FLOW_NETWORK env var
+    // Falls back to NODE_ENV check for backward compatibility
+    const flowNetwork = process.env.FLOW_NETWORK || (process.env.NODE_ENV === 'testnet' ? 'testnet' : 'mainnet');
+    const isTestnet = flowNetwork === 'testnet';
     this.apiUrl = isTestnet 
       ? process.env.FIND_LABS_API_BASE_TESTNET 
       : process.env.FIND_LABS_API_BASE_MAINNET;
 
     // It's great practice to log which environment you're using on startup
-    console.log(`🚀 AgentScannerService initialized for ${isTestnet ? 'TESTNET' : 'MAINNET'}`);
+    console.log(`🚀 AgentScannerService initialized for ${flowNetwork.toUpperCase()}`);
     console.log(`--> Using API endpoint: ${this.apiUrl}`);
     
     this.username = process.env.FIND_LABS_USERNAME;

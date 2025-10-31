@@ -1,6 +1,6 @@
-# FlowPilot Backend
+# Flowmatic Backend
 
-A Node.js/Express backend service for FlowPilot that provides Smart Scan functionality to discover and manage Flow Agents using the Find Labs API.
+A Node.js/Express backend service for Flowmatic that provides Smart Scan functionality to discover and manage Flow Agents using the Find Labs API.
 
 ## Features
 
@@ -42,7 +42,7 @@ Edit `.env` with your configuration:
 
 ```env
 # Database
-DATABASE_URL="mongodb+srv://username:password@cluster.mongodb.net/flowpilot"
+DATABASE_URL="mongodb+srv://username:password@cluster.mongodb.net/Flowmatic"
 
 # Find Labs API
 FIND_LABS_API_URL="https://api.find.xyz"

@@ -1,8 +1,8 @@
-# 🚀 FlowPilot
+# 🚀 Flowmatic
 
 Empowering the Flow Forte upgrade with user‑friendly on‑chain agents.
 
-FlowPilot makes Flow's new Agents and Scheduled Transactions accessible to everyone. We align with Flow's vision of a consumer chain by lowering the technical barrier: before FlowPilot, building with agents and scheduled transactions required deep Cadence and infra expertise. FlowPilot abstracts that complexity with a clean UI, a robust backend, and production‑ready Cadence so anyone can automate on‑chain tasks.
+Flowmatic makes Flow's new Agents and Scheduled Transactions accessible to everyone. We align with Flow's vision of a consumer chain by lowering the technical barrier: before Flowmatic, building with agents and scheduled transactions required deep Cadence and infra expertise. Flowmatic abstracts that complexity with a clean UI, a robust backend, and production‑ready Cadence so anyone can automate on‑chain tasks.
 
 [![Flow](https://img.shields.io/badge/Flow-Blockchain-00EF8B?style=flat&logo=flow&logoColor=white)](https://flow.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -12,7 +12,7 @@ FlowPilot makes Flow's new Agents and Scheduled Transactions accessible to every
 ## 💡 Why we built this
 
 - Agents and scheduled transactions were gated behind a steep technical barrier (Cadence, capabilities, fee estimation, scheduling semantics).
-- Forte unlocks powerful automation primitives; FlowPilot packages them into a friendly product to help mass adoption.
+- Forte unlocks powerful automation primitives; Flowmatic packages them into a friendly product to help mass adoption.
 - We bridge on‑chain automation with a backend that understands agent lifecycles, history, and status—no SDK babysitting on the client.
 
 ## ✨ Key features
@@ -136,7 +136,7 @@ npm run dev  # Starts on http://localhost:3000
 
 ### Test the flow
 
-1. **Open FlowPilot**: Navigate to http://localhost:3000
+1. **Open Flowmatic**: Navigate to http://localhost:3000
 2. **Connect Wallet**: Click "Connect Wallet" and authenticate with Flow testnet wallet
 3. **Ensure Testnet FLOW**: Make sure your wallet has testnet FLOW tokens ([Faucet](https://testnet-faucet.onflow.org))
 4. **Build Agent**: Click "Build New Agent" button

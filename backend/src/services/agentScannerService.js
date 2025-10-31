@@ -130,8 +130,7 @@ class AgentScannerService {
       tx.scheduled_transaction && !completedTxIds.has(tx.scheduled_transaction)
     );
     
-    const activeAgents = [];
-    const completedAgents = [];
+    const allAgentsWithChains = [];
     
     // Walk each chain
     heads.forEach(head => {
@@ -155,16 +154,113 @@ class AgentScannerService {
       const isCompleted = !isActive && lastCompletedTx && 
         !txByScheduledId.has(lastCompletedTx);
       
-      if (isActive) {
-        // Active agent - last tx is scheduled
-        activeAgents.push(this.buildAgentFromChain(chain, true));
-      } else if (isCompleted) {
-        // Completed agent - chain has ended
-        completedAgents.push(this.buildAgentFromChain(chain, false));
+      if (isActive || isCompleted) {
+        const agent = this.buildAgentFromChain(chain, isActive);
+        // Store agent with its chain for deduplication
+        allAgentsWithChains.push({ agent, chain, isActive });
       }
     });
     
+    // Deduplicate chains that share transactions
+    const deduplicated = this.deduplicateAgentChains(allAgentsWithChains);
+    
+    // Split into active and completed, filtering out empty completed agents
+    const activeAgents = deduplicated
+      .filter(item => item.isActive)
+      .map(item => item.agent);
+    
+    const completedAgents = deduplicated
+      .filter(item => !item.isActive)
+      .filter(item => item.agent.totalRuns > 0) // Filter out empty completed agents
+      .map(item => item.agent);
+    
     return { activeAgents, completedAgents };
+  }
+
+  /**
+   * Deduplicate agent chains that share transactions
+   * When multiple chains contain the same transaction IDs, keep only the longest chain
+   * @param {Array} agentsWithChains - Array of {agent, chain, isActive} objects
+   * @returns {Array} - Deduplicated array of agent objects
+   */
+  deduplicateAgentChains(agentsWithChains) {
+    if (agentsWithChains.length <= 1) {
+      return agentsWithChains;
+    }
+
+    // Build a map of transaction ID → chains that contain it
+    const txIdToChains = new Map();
+    
+    agentsWithChains.forEach((item, index) => {
+      item.chain.forEach(tx => {
+        const txId = tx.id;
+        if (!txIdToChains.has(txId)) {
+          txIdToChains.set(txId, []);
+        }
+        txIdToChains.get(txId).push(index);
+      });
+    });
+    
+    // Find chains that share transactions
+    const chainIndicesToRemove = new Set();
+    
+    agentsWithChains.forEach((item, index) => {
+      if (chainIndicesToRemove.has(index)) return;
+      
+      // Get all other chains that share any transaction with this chain
+      const overlappingChainIndices = new Set();
+      item.chain.forEach(tx => {
+        const chains = txIdToChains.get(tx.id) || [];
+        chains.forEach(chainIdx => {
+          if (chainIdx !== index) {
+            overlappingChainIndices.add(chainIdx);
+          }
+        });
+      });
+      
+      // For each overlapping chain, keep only the longest one
+      overlappingChainIndices.forEach(otherIndex => {
+        if (chainIndicesToRemove.has(otherIndex)) return;
+        
+        const currentChain = item.chain;
+        const otherChain = agentsWithChains[otherIndex].chain;
+        
+        // Check if one chain is a subset of the other
+        const currentTxIds = new Set(currentChain.map(tx => tx.id));
+        const otherTxIds = new Set(otherChain.map(tx => tx.id));
+        
+        const otherIsSubset = [...otherTxIds].every(id => currentTxIds.has(id));
+        const currentIsSubset = [...currentTxIds].every(id => otherTxIds.has(id));
+        
+        if (otherIsSubset && !currentIsSubset) {
+          // Other chain is a subset of current, remove it
+          chainIndicesToRemove.add(otherIndex);
+        } else if (currentIsSubset && !otherIsSubset) {
+          // Current chain is a subset of other, remove current
+          chainIndicesToRemove.add(index);
+        } else if (currentChain.length !== otherChain.length) {
+          // Keep the longer chain
+          if (currentChain.length > otherChain.length) {
+            chainIndicesToRemove.add(otherIndex);
+          } else {
+            chainIndicesToRemove.add(index);
+          }
+        } else {
+          // Same length, keep the one with the most recent scheduledAt
+          const currentMostRecent = Math.max(...currentChain.map(tx => new Date(tx.scheduled_at).getTime()));
+          const otherMostRecent = Math.max(...otherChain.map(tx => new Date(tx.scheduled_at).getTime()));
+          
+          if (currentMostRecent >= otherMostRecent) {
+            chainIndicesToRemove.add(otherIndex);
+          } else {
+            chainIndicesToRemove.add(index);
+          }
+        }
+      });
+    });
+    
+    // Return only chains that weren't removed
+    return agentsWithChains.filter((_, index) => !chainIndicesToRemove.has(index));
   }
 
   /**

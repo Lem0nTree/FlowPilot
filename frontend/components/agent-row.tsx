@@ -184,10 +184,6 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled={agent.status === "completed"}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edit Agent
-                </DropdownMenuItem>
                 <DropdownMenuItem 
                   className="text-destructive" 
                   onClick={() => onDelete(agent.id)}
@@ -263,14 +259,6 @@ export function AgentRow({ agent, onToggleStatus, onDelete }: AgentRowProps) {
             <Button size="sm" variant="outline" onClick={() => setShowLogs(true)}>
               <Clock className="mr-2 h-4 w-4" />
               View Logs
-            </Button>
-            <Button size="sm" variant="outline">
-              <Edit className="mr-2 h-4 w-4" />
-              Edit Workflow
-            </Button>
-            <Button size="sm" variant="outline">
-              <Play className="mr-2 h-4 w-4" />
-              Run Now
             </Button>
           </div>
         </div>

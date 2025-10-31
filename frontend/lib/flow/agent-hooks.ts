@@ -35,17 +35,24 @@ transaction(scheduledTxId: UInt64) {
 
 const DELETE_AGENT_TRANSACTION = `
 import "FlowTransactionSchedulerUtils"
+import "FlowToken"
+import "FungibleToken"
 
 transaction(scheduledTxId: UInt64) {
-  prepare(signer: auth(Storage) &Account) {
+  prepare(signer: auth(BorrowValue) &Account) {
     // Borrow the Manager resource from storage
     let manager = signer.storage.borrow<auth(FlowTransactionSchedulerUtils.Owner) &{FlowTransactionSchedulerUtils.Manager}>(
       from: FlowTransactionSchedulerUtils.managerStoragePath
-    ) ?? panic("Could not borrow Manager reference")
+    ) ?? panic("Could not borrow Manager reference. Make sure you have scheduled transactions.")
     
-    // Cancel the scheduled transaction through the Manager
-    // This will also trigger a partial fee refund
-    manager.cancelByID(scheduledTxId)
+    // Get the vault where the refund should be deposited
+    let vault = signer.storage.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault)
+      ?? panic("Could not borrow FlowToken vault")
+    
+    // Cancel the scheduled transaction and receive refund
+    // The cancel method returns a FlowToken.Vault containing the partial refund
+    let refund <- manager.cancel(id: scheduledTxId)
+    vault.deposit(from: <-refund)
   }
 }
 `
@@ -102,7 +109,13 @@ export function useDeleteAgent() {
         await new Promise(resolve => setTimeout(resolve, 2000))
         
         // Notify backend to delete agent
-        await backendAPI.deleteAgent(variables.agentId)
+        // This is best-effort - if it fails, the on-chain transaction already succeeded
+        try {
+          await backendAPI.deleteAgent(variables.agentId)
+        } catch (error) {
+          console.warn("Backend delete failed, but on-chain transaction succeeded:", error)
+          // Don't throw - the on-chain deletion was successful
+        }
       },
       onError: (error) => {
         console.error("Delete agent error:", error)

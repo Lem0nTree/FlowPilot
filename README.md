@@ -1,6 +1,7 @@
 # 🚀 Flowmatic
 
-Empowering the Flow Forte upgrade with user‑friendly on‑chain agents.
+**Build, Schedule, and Deploy Flow Agents in a click.**
+
 
 Flowmatic makes Flow's new Agents and Scheduled Transactions accessible to everyone. We align with Flow's vision of a consumer chain by lowering the technical barrier: before Flowmatic, building with agents and scheduled transactions required deep Cadence and infra expertise. Flowmatic abstracts that complexity with a clean UI, a robust backend, and production‑ready Cadence so anyone can automate on‑chain tasks.
 
@@ -14,11 +15,12 @@ Flowmatic makes Flow's new Agents and Scheduled Transactions accessible to every
 
 ---
 
-## 💡 Why we built this
+## 🏆 Hackathon Categories
 
-- Agents and scheduled transactions were gated behind a steep technical barrier (Cadence, capabilities, fee estimation, scheduling semantics).
-- Forte unlocks powerful automation primitives; Flowmatic packages them into a friendly product to help mass adoption.
-- We bridge on‑chain automation with a backend that understands agent lifecycles, history, and status—no SDK babysitting on the client.
+✅ **Best Killer App - Consumer:** Creating mass adoption on Flow agents for everyone
+✅ **Best Use of Flow Forte Actions & Workflows:** Utilizing custom scheduled transactions and actions as agent templates  
+✅ **Find Labs API Integration:** Backend fetches, caches, and chains scheduled transactions using the Find Labs API.
+
 
 ## ✨ Key features
 
@@ -32,11 +34,11 @@ Flowmatic makes Flow's new Agents and Scheduled Transactions accessible to every
 - **Transaction Concatenation**: Handlers schedule the next run during execution for true recurring flows.
 - **Accurate Metrics**: Total/success/failed runs, last execution, and dynamic schedule interval (e.g., "Every 10 minutes").
 
-## 🤖 Available Agent: Automatic Payment (Payment Cron)
+## 🤖 Available Agent: Automatic Payment (Payment Cron/Loop)
 
 ### What it does
 
-Automated, recurring FLOW token transfers to any recipient on a fixed cadence. Ideal for subscriptions, salaries, tips, rent, or DCA strategies.
+Automated, recurring FLOW token transfers to any recipient on a fixed cadence. Ideal for subscriptions, salaries, tips, rent, or automatic payments.
 
 ### Why it matters
 

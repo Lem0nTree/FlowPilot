@@ -12,6 +12,7 @@
     "db:push": "npx prisma db push",
     "db:studio": "npx prisma studio",
     "db:seed": "node src/scripts/seed.js",
+    "db:reset": "node src/scripts/reset-db.js",
     "test:connection": "node src/test/connection-test.js",
     "test:upsert": "node src/test/upsert-performance-test.js",
     "test:cache": "node src/test/cache-performance-test.js",

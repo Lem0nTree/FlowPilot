@@ -4,11 +4,11 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'FlowPilot Backend API',
+      title: 'FlowMatic Backend API',
       version: '1.0.0',
-      description: 'FlowPilot Backend - Smart Scan Service for Flow Agents',
+      description: 'FlowMatic Backend - Smart Scan Service for Flow Agents',
       contact: {
-        name: 'FlowPilot Team',
+        name: 'Flowmatic Team',
         email: 'support@flowpilot.com'
       },
       license: {

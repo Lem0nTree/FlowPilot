@@ -49,8 +49,8 @@ export default function RootLayout({
 
 export const metadata: Metadata = {
   title: {
-    default: "FlowPilot - Autonomous Agent Management for Flow Blockchain",
-    template: "%s | FlowPilot"
+    default: "Flowmatic - Autonomous Agent Management for Flow Blockchain",
+    template: "%s | Flowmatic"
   },
   description: "Empowering the Flow Forte upgrade with user-friendly on-chain agents. Create, manage, and monitor autonomous agents using Scheduled Transactions without writing code.",
   keywords: [
@@ -84,7 +84,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: "https://flowpilot.app",
-    title: "FlowPilot - Autonomous Agent Management for Flow Blockchain",
+    title: "Flowmatic - Autonomous Agent Management for Flow Blockchain",
     description: "Empowering the Flow Forte upgrade with user-friendly on-chain agents. Create, manage, and monitor autonomous agents using Scheduled Transactions without writing code.",
     siteName: "FlowPilot",
     images: [
@@ -92,7 +92,7 @@ export const metadata: Metadata = {
         url: "/og-image.svg",
         width: 1200,
         height: 630,
-        alt: "FlowPilot - Autonomous Agent Management for Flow Blockchain",
+        alt: "Flowmatic - Autonomous Agent Management for Flow Blockchain",
       },
     ],
   },

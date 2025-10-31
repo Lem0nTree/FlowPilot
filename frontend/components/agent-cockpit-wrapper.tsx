@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { Wallet, Plus, Sun, Moon, RefreshCw, Loader2 } from "lucide-react"
+import Image from "next/image"
 
 type Agent = {
   id: string
@@ -590,9 +591,15 @@ export function AgentCockpitWrapper() {
       <div className="min-h-screen bg-background">
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
           <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-            <div className="space-y-1">
-              <h1 className="text-2xl font-semibold text-foreground">Flow Pilot Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Manage your on-chain automations</p>
+            <div className="flex items-center">
+              <Image
+                src="/logo/Flowmatic_logotype.svg"
+                alt="Flowmatic"
+                width={200}
+                height={60}
+                className={`transition-colors ${theme === "dark" ? "brightness-0 invert" : "brightness-0"}`}
+                priority
+              />
             </div>
             <div className="flex items-center gap-3">
               <Button onClick={handleBuildAgent} className="bg-primary text-primary-foreground hover:bg-primary/90">

@@ -1,6 +1,6 @@
 {
-  "name": "FlowPilot - Autonomous Agent Management for Flow Blockchain",
-  "short_name": "FlowPilot",
+  "name": "Flowmatic - Autonomous Agent Management for Flow Blockchain",
+  "short_name": "Flowmatic",
   "description": "Empowering the Flow Forte upgrade with user-friendly on-chain agents. Create, manage, and monitor autonomous agents using Scheduled Transactions without writing code.",
   "start_url": "/",
   "display": "standalone",
@@ -19,11 +19,6 @@
     {
       "src": "/favicon-32x32.png",
       "sizes": "32x32",
-      "type": "image/png"
-    },
-    {
-      "src": "/apple-touch-icon.png",
-      "sizes": "180x180",
       "type": "image/png"
     },
     {

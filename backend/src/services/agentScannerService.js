@@ -117,16 +117,22 @@ class AgentScannerService {
   buildExecutionChains(transactions) {
     // Build maps for efficient lookups
     const txById = new Map(); // transaction id → tx
-    const txByScheduledId = new Map(); // scheduled_transaction → tx
+    const txByScheduledId = new Map(); // scheduled_transaction → tx (maps completed_tx → next tx)
     const completedTxIds = new Set(); // all completed_transaction IDs
     
     transactions.forEach(tx => {
       txById.set(tx.id, tx);
-      if (tx.scheduled_transaction) {
-        txByScheduledId.set(tx.scheduled_transaction, tx);
+      // Collect all completed_transaction IDs (excluding empty strings)
+      const completedTx = tx.completed_transaction;
+      if (completedTx && (typeof completedTx === 'string' ? completedTx.trim() !== '' : completedTx)) {
+        completedTxIds.add(completedTx);
       }
-      if (tx.completed_transaction) {
-        completedTxIds.add(tx.completed_transaction);
+    });
+    
+    // Build reverse mapping: completed_transaction → transaction that has it as scheduled_transaction
+    transactions.forEach(tx => {
+      if (tx.scheduled_transaction && completedTxIds.has(tx.scheduled_transaction)) {
+        txByScheduledId.set(tx.scheduled_transaction, tx);
       }
     });
     
@@ -157,6 +163,7 @@ class AgentScannerService {
       let current = head;
       
       // Walk forward through the chain
+      // Each transaction's completed_transaction should match the next transaction's scheduled_transaction
       while (current && !processedTxIds.has(current.id)) {
         chain.push(current);
         processedTxIds.add(current.id);
@@ -164,15 +171,23 @@ class AgentScannerService {
         // Find next transaction in chain: look for transaction whose scheduled_transaction
         // matches this transaction's completed_transaction
         const nextCompletedTx = current.completed_transaction;
-        current = nextCompletedTx ? txByScheduledId.get(nextCompletedTx) : null;
+        const isValidCompletedTx = nextCompletedTx && 
+          (typeof nextCompletedTx === 'string' ? nextCompletedTx.trim() !== '' : nextCompletedTx);
+        if (isValidCompletedTx && txByScheduledId.has(nextCompletedTx)) {
+          current = txByScheduledId.get(nextCompletedTx);
+        } else {
+          // No more transactions in chain
+          current = null;
+        }
       }
       
       // Only create agent if chain has at least one transaction
       if (chain.length > 0) {
         // Determine if chain is active or completed
+        // Active if the last transaction is still scheduled
         const lastTx = chain[chain.length - 1];
-        const isActive = lastTx.status === 'scheduled';
-        const isCompleted = !isActive && lastTx.is_completed;
+        const isActive = lastTx.status === 'scheduled' || (lastTx.is_completed === false);
+        const isCompleted = !isActive && lastTx.is_completed === true;
         
         if (isActive || isCompleted) {
           const agent = this.buildAgentFromChain(chain, isActive);

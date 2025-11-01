@@ -121,6 +121,22 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
             fees: agent.fees
           });
 
+          // Filter out completed agents that are already part of active agents' execution history
+          const cachedActiveAgentHistoryTxIds = new Set();
+          cachedActiveAgents.forEach(agent => {
+            if (agent.executionHistory && Array.isArray(agent.executionHistory)) {
+              agent.executionHistory.forEach(exec => {
+                if (exec.scheduledTxId) {
+                  cachedActiveAgentHistoryTxIds.add(exec.scheduledTxId);
+                }
+              });
+            }
+          });
+          
+          const filteredCachedCompletedAgents = cachedCompletedAgents.filter(agent => 
+            !cachedActiveAgentHistoryTxIds.has(agent.scheduledTxId)
+          );
+
           return res.status(200).json({
             success: true,
             message: 'Synced from local cache',
@@ -131,12 +147,12 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
                 nickname: user.nickname
               },
               agents: cachedActiveAgents.map(mapCachedAgent),
-              completedAgents: cachedCompletedAgents.map(mapCachedAgent),
+              completedAgents: filteredCachedCompletedAgents.map(mapCachedAgent),
               scanSummary: {
-                totalFound: cachedActiveAgents.length + cachedCompletedAgents.length,
+                totalFound: cachedActiveAgents.length + filteredCachedCompletedAgents.length,
                 activeCount: cachedActiveAgents.length,
-                completedCount: cachedCompletedAgents.length,
-                processed: cachedActiveAgents.length + cachedCompletedAgents.length,
+                completedCount: filteredCachedCompletedAgents.length,
+                processed: cachedActiveAgents.length + filteredCachedCompletedAgents.length,
                 scannedAt: lastScan.createdAt,
                 cached: true
               }
@@ -174,6 +190,19 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
     const agentsToCreate = [];
     const agentsToDeactivate = [];
     const agentsToUpdate = [];
+
+    // Collect all scheduledTxIds that appear in active agents' execution history
+    // These should not be created as separate completed agents
+    const activeAgentHistoryTxIds = new Set();
+    for (const agentData of apiActiveAgentMap.values()) {
+      if (agentData.executionHistory && Array.isArray(agentData.executionHistory)) {
+        agentData.executionHistory.forEach(execution => {
+          if (execution.scheduledTxId) {
+            activeAgentHistoryTxIds.add(execution.scheduledTxId);
+          }
+        });
+      }
+    }
 
     // Process active agents from API
     for (const [txId, agentData] of apiActiveAgentMap.entries()) {
@@ -218,7 +247,27 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
     }
 
     // Process completed agents from API
+    // Skip completed agents that are already part of an active agent's execution history
     for (const [txId, agentData] of apiCompletedAgentMap.entries()) {
+      // Skip if this completed agent's scheduledTxId appears in any active agent's execution history
+      if (activeAgentHistoryTxIds.has(txId)) {
+        console.log(`⏭️  Skipping completed agent ${txId} - already part of active agent's execution history`);
+        // If it exists in DB, mark it as deactivated (it's now part of an active agent's chain)
+        if (dbAgentMap.has(txId)) {
+          const dbAgent = dbAgentMap.get(txId);
+          if (dbAgent.isActive) {
+            agentsToUpdate.push({
+              id: dbAgent.id,
+              data: {
+                isActive: false,
+                status: 'completed',
+                updatedAt: new Date()
+              }
+            });
+          }
+        }
+        continue;
+      }
       if (!dbAgentMap.has(txId)) {
         agentsToCreate.push({
           scheduledTxId: agentData.scheduledTxId,
@@ -261,9 +310,21 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
       }
     }
 
-    // Find agents to deactivate (in DB but not in API - neither active nor completed)
+    // Find agents to deactivate:
+    // 1. Agents in DB but not in API (neither active nor completed)
+    // 2. Completed agents in DB that are now part of an active agent's execution history
     for (const [txId, dbAgent] of dbAgentMap.entries()) {
-      if (!apiActiveAgentMap.has(txId) && !apiCompletedAgentMap.has(txId) && dbAgent.isActive) {
+      // Check if agent is in API
+      const inActive = apiActiveAgentMap.has(txId);
+      const inCompleted = apiCompletedAgentMap.has(txId);
+      
+      if (!inActive && !inCompleted && dbAgent.isActive) {
+        // Agent was active but no longer in API
+        agentsToDeactivate.push(txId);
+      } else if (!inActive && activeAgentHistoryTxIds.has(txId)) {
+        // Agent is not active in API but is part of an active agent's history
+        // Delete it since it's redundant (already represented in the active agent's execution history)
+        console.log(`🗑️  Marking agent ${txId} for deletion - now part of active agent's execution history`);
         agentsToDeactivate.push(txId);
       }
     }
@@ -387,6 +448,27 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
       fees: agent.fees
     });
 
+    // Filter out completed agents that are already part of active agents' execution history
+    // These are redundant since they're already represented in the active agent's chain
+    const activeAgentHistoryTxIdsSet = new Set();
+    activeAgents.forEach(agent => {
+      if (agent.executionHistory && Array.isArray(agent.executionHistory)) {
+        agent.executionHistory.forEach(exec => {
+          if (exec.scheduledTxId) {
+            activeAgentHistoryTxIdsSet.add(exec.scheduledTxId);
+          }
+        });
+      }
+    });
+    
+    const filteredCompletedAgents = completedAgents.filter(agent => {
+      const isInActiveHistory = activeAgentHistoryTxIdsSet.has(agent.scheduledTxId);
+      if (isInActiveHistory) {
+        console.log(`⏭️  Filtering out completed agent ${agent.scheduledTxId} - already in active agent's execution history`);
+      }
+      return !isInActiveHistory;
+    });
+
     res.status(200).json({
       success: true,
       message: 'Smart Scan completed with state reconciliation',
@@ -397,12 +479,12 @@ router.post('/', validateFlowAddress, validateRequest, async (req, res, next) =>
           nickname: user.nickname
         },
         agents: activeAgents.map(mapAgentData),
-        completedAgents: completedAgents.map(mapAgentData),
+        completedAgents: filteredCompletedAgents.map(mapAgentData),
         scanSummary: {
           totalFound: scanResult.totalFound,
           activeCount: activeAgents.length,
-          completedCount: completedAgents.length,
-          processed: activeAgents.length + completedAgents.length,
+          completedCount: filteredCompletedAgents.length,
+          processed: activeAgents.length + filteredCompletedAgents.length,
           scannedAt: scanResult.scannedAt,
           reconciliation: {
             created: results.created,

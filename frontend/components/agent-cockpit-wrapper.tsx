@@ -540,8 +540,8 @@ export function AgentCockpitWrapper() {
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="text-center space-y-6">
           <div className="space-y-2">
-            <h1 className="text-4xl font-semibold text-foreground">FlowPilot</h1>
-            <p className="text-sm text-muted-foreground">Your on-chain automation hub</p>
+            <h1 className="text-4xl font-semibold text-foreground">Flowmatic</h1>
+            <p className="text-sm text-muted-foreground">Build, Schedule, and Deploy Flow Agents in a click.</p>
           </div>
           <Button
             onClick={handleConnectWallet}

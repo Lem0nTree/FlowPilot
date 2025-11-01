@@ -18,7 +18,7 @@ export function EmptyState({ onBuildAgent, onImportAgent }: EmptyStateProps) {
           </div>
         </div>
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold text-foreground">Welcome to FlowPilot</h2>
+          <h2 className="text-2xl font-semibold text-foreground">Welcome to Flowmatic</h2>
           <p className="text-muted-foreground text-balance">
             Your on-chain automation hub. Create your first Agent to automate blockchain tasks like token swaps,
             staking, and NFT minting.

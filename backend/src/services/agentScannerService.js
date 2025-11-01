@@ -110,15 +110,18 @@ class AgentScannerService {
   /**
    * Build execution chains from all transactions
    * Groups transactions by following scheduled_transaction → completed_transaction linkage
+   * Each transaction's scheduled_transaction should match the previous transaction's completed_transaction
    * @param {Array} transactions - All transactions from API
    * @returns {Object} - Active and completed agents with execution chains
    */
   buildExecutionChains(transactions) {
     // Build maps for efficient lookups
+    const txById = new Map(); // transaction id → tx
     const txByScheduledId = new Map(); // scheduled_transaction → tx
     const completedTxIds = new Set(); // all completed_transaction IDs
     
     transactions.forEach(tx => {
+      txById.set(tx.id, tx);
       if (tx.scheduled_transaction) {
         txByScheduledId.set(tx.scheduled_transaction, tx);
       }
@@ -127,51 +130,64 @@ class AgentScannerService {
       }
     });
     
-    // Find chain heads (scheduled_tx not in anyone's completed_tx)
-    const heads = transactions.filter(tx => 
-      tx.scheduled_transaction && !completedTxIds.has(tx.scheduled_transaction)
-    );
-    
-    const allAgentsWithChains = [];
-    
-    // Walk each chain
-    heads.forEach(head => {
-      const chain = [];
-      let current = head;
-      let lastCompletedTx = null;
-      
-      // Walk forward through the chain
-      while (current) {
-        chain.push(current);
-        lastCompletedTx = current.completed_transaction;
-        
-        // Find next transaction in chain
-        current = lastCompletedTx ? 
-          txByScheduledId.get(lastCompletedTx) : null;
-      }
-      
-      // Determine if chain is active or completed
-      const lastTx = chain[chain.length - 1];
-      const isActive = lastTx.status === 'scheduled';
-      const isCompleted = !isActive && lastCompletedTx && 
-        !txByScheduledId.has(lastCompletedTx);
-      
-      if (isActive || isCompleted) {
-        const agent = this.buildAgentFromChain(chain, isActive);
-        // Store agent with its chain for deduplication
-        allAgentsWithChains.push({ agent, chain, isActive });
+    // Build a map to track which transactions are "children" (their scheduled_transaction
+    // matches another transaction's completed_transaction)
+    const isChild = new Set();
+    transactions.forEach(tx => {
+      if (tx.scheduled_transaction && completedTxIds.has(tx.scheduled_transaction)) {
+        isChild.add(tx.id);
       }
     });
     
-    // Deduplicate chains that share transactions
-    const deduplicated = this.deduplicateAgentChains(allAgentsWithChains);
+    // Find true chain heads: transactions that are NOT children of other transactions
+    // A chain head starts a new chain (not a continuation)
+    const heads = transactions.filter(tx => !isChild.has(tx.id));
+    
+    // Now build chains from each head, tracking which transactions we've processed
+    const processedTxIds = new Set();
+    const allAgentsWithChains = [];
+    
+    heads.forEach(head => {
+      // Skip if we've already processed this transaction as part of another chain
+      if (processedTxIds.has(head.id)) {
+        return;
+      }
+      
+      const chain = [];
+      let current = head;
+      
+      // Walk forward through the chain
+      while (current && !processedTxIds.has(current.id)) {
+        chain.push(current);
+        processedTxIds.add(current.id);
+        
+        // Find next transaction in chain: look for transaction whose scheduled_transaction
+        // matches this transaction's completed_transaction
+        const nextCompletedTx = current.completed_transaction;
+        current = nextCompletedTx ? txByScheduledId.get(nextCompletedTx) : null;
+      }
+      
+      // Only create agent if chain has at least one transaction
+      if (chain.length > 0) {
+        // Determine if chain is active or completed
+        const lastTx = chain[chain.length - 1];
+        const isActive = lastTx.status === 'scheduled';
+        const isCompleted = !isActive && lastTx.is_completed;
+        
+        if (isActive || isCompleted) {
+          const agent = this.buildAgentFromChain(chain, isActive);
+          // Store agent with its chain
+          allAgentsWithChains.push({ agent, chain, isActive });
+        }
+      }
+    });
     
     // Split into active and completed, filtering out empty completed agents
-    const activeAgents = deduplicated
+    const activeAgents = allAgentsWithChains
       .filter(item => item.isActive)
       .map(item => item.agent);
     
-    const completedAgents = deduplicated
+    const completedAgents = allAgentsWithChains
       .filter(item => !item.isActive)
       .filter(item => item.agent.totalRuns > 0) // Filter out empty completed agents
       .map(item => item.agent);

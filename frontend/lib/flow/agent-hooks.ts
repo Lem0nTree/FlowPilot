@@ -45,14 +45,26 @@ transaction(scheduledTxId: UInt64) {
       from: FlowTransactionSchedulerUtils.managerStoragePath
     ) ?? panic("Could not borrow Manager reference. Make sure you have scheduled transactions.")
     
-    // Get the vault where the refund should be deposited
-    let vault = signer.storage.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault)
-      ?? panic("Could not borrow FlowToken vault")
-    
-    // Cancel the scheduled transaction and receive refund
-    // The cancel method returns a FlowToken.Vault containing the partial refund
-    let refund <- manager.cancel(id: scheduledTxId)
-    vault.deposit(from: <-refund)
+    // Check if the transaction exists and is still scheduled
+    // If it's already cancelled, executed, or doesn't exist, skip cancellation
+    if let status = manager.getTransactionStatus(id: scheduledTxId) {
+      // Only cancel if the transaction is still scheduled
+      if status == FlowTransactionScheduler.Status.Scheduled {
+        // Get the vault where the refund should be deposited
+        let vault = signer.storage.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault)
+          ?? panic("Could not borrow FlowToken vault")
+        
+        // Cancel the scheduled transaction and receive refund
+        // The cancel method returns a FlowToken.Vault containing the partial refund
+        let refund <- manager.cancel(id: scheduledTxId)
+        vault.deposit(from: <-refund)
+      }
+      // If status is Canceled or Executed, the transaction is already handled
+      // No action needed - the agent deletion is effectively complete
+    }
+    // If status is nil/Unknown, the transaction doesn't exist in the Manager
+    // This might mean it was never scheduled or was already removed
+    // No action needed - proceed with agent deletion
   }
 }
 `

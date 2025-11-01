@@ -831,20 +831,67 @@ export function AgentCockpitWrapper() {
                 setIsInitializingHandler(false)
                 setIsCreatingAgent(false)
                 
-                // Wait longer for blockchain and API to sync before reloading
+                // Get current agent count to detect when new agent appears
+                const currentAgentCount = agents.length
+                
                 toast({
                   title: "Agent Created!",
                   description: "Waiting for blockchain confirmation...",
                 })
                 
-                setTimeout(async () => {
-                  console.log("🔄 Reloading agents after blockchain sync delay...")
+                // Poll for the new agent to appear in the API
+                const pollForNewAgent = async (maxRetries = 15, initialDelay = 3000) => {
+                  // Initial delay to allow transaction to be sealed
+                  await new Promise(resolve => setTimeout(resolve, initialDelay))
+                  
+                  for (let attempt = 0; attempt < maxRetries; attempt++) {
+                    try {
+                      console.log(`🔄 Polling for new agent (attempt ${attempt + 1}/${maxRetries})...`)
+                      
+                      // Force refresh to get latest data from blockchain
+                      const syncResult = await backendAPI.syncAgents(user?.addr!, true)
+                      const newAgentCount = (syncResult.data.agents || []).length
+                      
+                      // Check if we have a new agent
+                      if (newAgentCount > currentAgentCount) {
+                        console.log(`✅ New agent detected! Reloading dashboard...`)
+                        
+                        // Reload agents to update the UI
+                        await loadAgents(true)
+                        
+                        toast({
+                          title: "Dashboard Updated",
+                          description: "Your new agent is now visible",
+                        })
+                        return
+                      }
+                      
+                      // If not found yet, wait before next attempt
+                      if (attempt < maxRetries - 1) {
+                        // Progressive delay: 2s, 2s, 3s, 3s, etc.
+                        const delay = attempt < 2 ? 2000 : 3000
+                        await new Promise(resolve => setTimeout(resolve, delay))
+                      }
+                    } catch (error) {
+                      console.error(`Error polling for agent (attempt ${attempt + 1}):`, error)
+                      // Continue polling even if one request fails
+                      if (attempt < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 2000))
+                      }
+                    }
+                  }
+                  
+                  // Max retries reached - still try to reload
+                  console.log("⏱️ Max polling attempts reached. Reloading anyway...")
                   await loadAgents(true)
                   toast({
                     title: "Dashboard Updated",
-                    description: "Your new agent is now visible",
+                    description: "Please refresh manually if your agent doesn't appear",
                   })
-                }, 8000) // 8 second delay for blockchain + API sync
+                }
+                
+                // Start polling
+                pollForNewAgent()
               }
             }
           }}
